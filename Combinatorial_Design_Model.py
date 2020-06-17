@@ -5,6 +5,8 @@ from CDM_regression import CDM_regression_model
 from harness.utils.parsing_results import *
 from harness.utils.names import Names as Names_TH
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score
+from scipy.stats import wasserstein_distance
 
 class Combinatorial_Design_Model():
 
@@ -35,6 +37,34 @@ class Combinatorial_Design_Model():
         #TODO: Put in code to read in model once test harness writes it out
         self.model = ""
 
+    def evaluate_model(self,df,index_col_new_data,target_col_new_data,index_col_predictions_data,custom_metric=None):
+        '''
+        Take in a dataframe that was produced by the experiment and compare it with the predicted dataframe
+        :param df: experiment dataframe
+        :param df: a new dataframe generated from data in the lab to compare with prediction dataframe
+        :param index_col_new_data: the index column in the new dataset
+        :param index_col_predictions_data: the index column that was used in the predictions dataset
+        :param query: query on leaderboard to see which outputs you want predicted
+        :param th_output_location: path to test harness output
+        :param loo: True/False -- is this a LOO Run
+        :param classification: is this a classification or regression problem
+        :param custom_metric: define a metric you want to use to compare your predictions. Can be a callable method or str
+                            r2 = R^2 metric
+                            emd = Earth Mover's distance
+        :return: scalar performance of model
+        '''
+        df_all = join_new_data_with_predictions(df,index_col_new_data,index_col_predictions_data,{Names_TH.RUN_ID:self.model_id}, self.path, loo=False, classification=False,file_type=Names_TH.PREDICTED_DATA)
+        for col in df_all.columns:
+            if '_predictions' in col:
+                pred_col = col
+
+        if custom_metric=='r2':
+            return r2_score(df_all[pred_col],df_all[target_col_new_data])
+        elif custom_metric == 'emd':
+            return wasserstein_distance(df_all[pred_col],df_all[target_col_new_data])
+        else:
+            #TODO: ensure custom metric_can take at least two arguments
+            return custom_metric(df_all[pred_col],df_all[target_col_new_data])
 
 class Host_Response_Model(Combinatorial_Design_Model):
 
