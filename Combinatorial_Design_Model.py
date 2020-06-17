@@ -9,6 +9,9 @@ from sklearn.model_selection import train_test_split
 class Combinatorial_Design_Model():
 
     def __init__(self,initial_data="",path=".",query={},**th_properties):
+        #TODO: build a way to check if user wants to run something that they already ran.
+        #TODO: and read that instead of re-running test harnness
+
         self.path = path
         self.th = TestHarness(output_location=path)
         if not query:
