@@ -39,6 +39,50 @@ class Combinatorial_Design_Model():
         #TODO: Put in code to read in model once test harness writes it out
         self.model = ""
 
+    def retrieve_experiments_to_predict(self, variable_columns: list):
+        #computes full condition space and returns experiments that have no data and need to be predicted
+        unique_column_values = [self.data[column].unique() for column in variable_columns]
+        #inefficent can be combined with line above
+        for item in variable_columns:
+            print('Column {0}: contains {1} unqiue values'.format(item, len(self.data[item].unique())))
+
+        permutations = set(itertools.product(*unique_column_values))
+        temp_df = self.data[variable_columns].drop_duplicates()
+        current_experiments = set(zip(*[temp_df[column].values for column in variable_columns]))
+        experiments_to_predict = permutations - current_experiments
+        # current_experiments = list(current_experiments)
+        experiments_to_predict = list(experiments_to_predict)
+
+        print('Input dataframe contains {0} conditions out of {1} possible conditions\nThere are {2} conditions to be predicted'.format(len(current_experiments), len(permutations), len(experiments_to_predict)))
+
+        return experiments_to_predict
+
+    def generate_experiments_to_predict(self, variable_columns:list):
+        #generates and returns a dataframe of experiments that lack data
+
+        experiments_to_predict = self.retrieve_experiments_to_predict(self.data, variable_columns)
+        predict_df = pd.DataFrame(experiments_to_predict, columns=variable_columns)
+
+        return predict_df
+
+    def return_sampled_df(self, percentage:int, variable_columns:list):
+        number_of_samples_to_select = float(percentage*1e-2)
+        temp_df = self.data[variable_columns].drop_duplicates()
+        temp_df = temp_df.sample(frac=1).sample(frac=number_of_samples_to_select)
+
+        return temp_df
+
+    def build_progressive_sampling(self,num_runs=3,start_percent=25, end_percent=100, step_size=5, variable_columns:list):
+        for run in range(1,num_runs):
+            for percent in range(start_percent, end_percent, step_size):
+                sampled_df = self.return_sampled_df(self.data, percent, variable_columns)
+                test_df = self.data.loc[~self.data.index.isin(sampled_df.index)]
+                self.build_model(train_df=sampled_df, test_df=test_df, th_properties={})
+            #TODO: characterizaton has yet to include calculation of knee point
+
+    def rank_results(self, results_df, control_col, prediction_col, rank_name: str):
+        results_df[rank_name] = results_df[prediction_col]/results_df[control_col]
+        return results_df
 
     def evaluate_model(self,df,index_col_new_data,target_col_new_data,index_col_predictions_data,custom_metric=None):
         '''
