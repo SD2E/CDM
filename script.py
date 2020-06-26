@@ -27,6 +27,6 @@ def process_file_from_data_converge(filename='demo_data.json',
     final_df.dropna(inplace=True)
     return final_df
 
-filename = '/Users/meslami/Downloads/YeastSTATES-CRISPR-Long-Duration-Time-Series-20191208__fc_etl_events.json'
-meta_filename = '/Users/meslami/Downloads/YeastSTATES-CRISPR-Long-Duration-Time-Series-20191208__fc_meta.csv'
+filename = 'data/YeastSTATES-CRISPR-Long-Duration-Time-Series-20191208__fc_etl_events.json'
+meta_filename = 'data/YeastSTATES-CRISPR-Long-Duration-Time-Series-20191208__fc_meta.csv'
 df = process_file_from_data_converge(filename=filename,metadata_filename=meta_filename)
