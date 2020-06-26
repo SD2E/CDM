@@ -19,25 +19,30 @@ class Combinatorial_Design_Model():
         self.path = path
         self.th = TestHarness(output_location=path)
         if not query:
-            self.data = initial_data
+            ## TODO: Hamed, update this to call William's methods to generate train/test/predicted untested dataframe based on condition space
+            self.data = initial_data #this is both train/test
+            self.left_out_conditions = None #this is the dataframe for left out conditions and will serve as predict_untested_df
             self.build_model(th_properties)
         else:
             self.model_id = query_leaderboard(query=query,th_output_location=path)[Names_TH.RUN_ID]
             #Put in code to get the path of the model and read it in once Hamed works that in
             self.model = ""
 
+
     def build_model(self,train_df=None,test_df=None,th_properties={}):
         if train_df is None or test_df is None:
             train_df,test_df = train_test_split(self.data, test_size=0.2)
 
         #TODO: Fix up test/harness run
+        '''
+        PUT IN PREDICTED UNTESTED DATAFRAME FLAG!
+        '''
         self.th.run_custom(function_that_returns_TH_model=CDM_regression_model, dict_of_function_parameters={'input_size': len(th_properties['feature_cols_to_use']), 'output_size': len(th_properties['cols_to_predict'])},
                       training_data=train_df, testing_data=test_df,
                       data_and_split_description=th_properties[Names_TH.DATA_AND_SPLIT_DESCRIPTION],
                       cols_to_predict=th_properties['cols_to_predict'], feature_cols_to_use=th_properties['feature_cols_to_use'],
                       index_cols=th_properties['index_cols'], normalize=False, feature_cols_to_normalize=None)
-        #TODO: Put in code to read in model once test harness writes it out
-        self.model = ""
+
 
     def retrieve_experiments_to_predict(self, variable_columns: list):
         #computes full condition space and returns experiments that have no data and need to be predicted
@@ -72,7 +77,7 @@ class Combinatorial_Design_Model():
 
         return temp_df
 
-    def build_progressive_sampling(self,num_runs=3,start_percent=25, end_percent=100, step_size=5, variable_columns:list):
+    def build_progressive_sampling(self,variable_columns:list,num_runs=3,start_percent=25, end_percent=100, step_size=5):
         for run in range(1,num_runs):
             for percent in range(start_percent, end_percent, step_size):
                 sampled_df = self.return_sampled_df(self.data, percent, variable_columns)
@@ -147,7 +152,7 @@ class Combinatorial_Design_Model():
 
         return temp_df
 
-    def build_progressive_sampling(self,num_runs=3,start_percent=25, end_percent=100, step_size=5, variable_columns:list):
+    def build_progressive_sampling(self,variable_columns:list,num_runs=3,start_percent=25, end_percent=100, step_size=5):
         for run in range(1,num_runs):
             for percent in range(start_percent, end_percent, step_size):
                 sampled_df = self.return_sampled_df(self.data, percent, variable_columns)
