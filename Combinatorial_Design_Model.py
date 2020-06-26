@@ -19,7 +19,9 @@ class Combinatorial_Design_Model():
         self.path = path
         self.th = TestHarness(output_location=path)
         if not query:
-            self.data = initial_data
+            ## TODO: Hamed, update this to call William's methods to generate train/test/predicted untested dataframe based on condition space
+            self.data = initial_data #this is both train/test
+            self.left_out_conditions = None #this is the dataframe for left out conditions and will serve as predict_untested_df
             self.build_model(th_properties)
         else:
             self.model_id = query_leaderboard(query=query,th_output_location=path)[Names_TH.RUN_ID]

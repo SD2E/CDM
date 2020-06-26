@@ -5,8 +5,8 @@ import numpy as np
 
 def process_file_from_data_converge(filename='demo_data.json',
                                     metadata_filename='YeastSTATES-CRISPR-Long-Duration-Time-Series-20191208__meta.csv',
-                                    variable_columns=['strain_name', 'inducer_concentration'],
-                                    prediction_column='BL1-A_MEFL'):
+                                    variable_columns=['strain_name', 'inducer_concentration_mM'],
+                                    prediction_column='BL1-A'):
     df = pd.read_json(filename, orient='records')[['sample_id', prediction_column]]
 
     df.set_index('sample_id', drop=True, inplace=True)
@@ -27,6 +27,6 @@ def process_file_from_data_converge(filename='demo_data.json',
     final_df.dropna(inplace=True)
     return final_df
 
-filename = 'data/YeastSTATES-CRISPR-Long-Duration-Time-Series-20191208__fc_etl_events.json'
+filename = 'data/demo_data.json'
 meta_filename = 'data/YeastSTATES-CRISPR-Long-Duration-Time-Series-20191208__fc_meta.csv'
 df = process_file_from_data_converge(filename=filename,metadata_filename=meta_filename)
