@@ -36,9 +36,9 @@ class CombinatorialDesignModel:
             self.exp_condition_cols = exp_condition_cols
 
         if leaderboard_query is None:
-            # the data is split into existing_data and future_data
+            # set existing_data and generate future_conditions
             self.existing_data = initial_data
-            self.future_data = self.generate_future_experiments_df()
+            self.future_conditions = self.generate_future_experiments_df()
         else:
             self.model_id = query_leaderboard(query=leaderboard_query, th_output_location=output_path)[Names_TH.RUN_ID]
             # Put in code to get the path of the model and read it in once Hamed works that in
@@ -139,8 +139,8 @@ class CombinatorialDesignModel:
         train_ratio = percent_train / 100.0
         train_df, test_df = train_test_split(self.existing_data, train_size=train_ratio, random_state=5,
                                              stratify=self.existing_data[self.exp_condition_cols])
-        self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_data,
-                                 percent_data=100, percent_train=percent_train, num_pred_conditions=len(self.future_data))
+        self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_conditions,
+                                 percent_data=100, percent_train=percent_train, num_pred_conditions=len(self.future_conditions))
 
     def run_progressive_sampling(self, num_runs=1, start_percent=25, end_percent=100, step_size=5,
                                  percent_train=70):
@@ -165,8 +165,8 @@ class CombinatorialDesignModel:
                                                      stratify=existing_data_sample[self.exp_condition_cols])
 
                 # invoke the Test Harness with the splits we created:
-                self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_data,
-                                         percent_data=percent, percent_train=percent_train, num_pred_conditions=len(self.future_data))
+                self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_conditions,
+                                         percent_data=percent, percent_train=percent_train, num_pred_conditions=len(self.future_conditions))
             # TODO: characterizaton has yet to include calculation of knee point
 
     # validation_data goes into here
