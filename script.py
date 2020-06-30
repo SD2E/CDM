@@ -1,13 +1,18 @@
 import pandas as pd
 import numpy as np
 
-# from Combinatorial_Design_Model import Combinatorial_Design_Model as CDM
+pd.set_option('display.max_columns', 500)
+pd.set_option('display.width', 10000)
+pd.set_option('display.max_colwidth', None)
 
-def process_file_from_data_converge(filename='demo_data.json',
-                                    metadata_filename='YeastSTATES-CRISPR-Long-Duration-Time-Series-20191208__meta.csv',
-                                    variable_columns=['strain_name', 'inducer_concentration_mM'],
-                                    prediction_column='BL1-A'):
-    df = pd.read_json(filename, orient='records')[['sample_id', prediction_column]]
+
+def process_file_from_data_converge(file_name, metadata_filename,
+                                    variable_columns=None, prediction_column='BL1-A',
+                                    log_data=False):
+    if variable_columns is None:
+        variable_columns = ['strain_name', 'inducer_concentration_mM']
+
+    df = pd.read_json(file_name, orient='records')[['sample_id', prediction_column]]
 
     df.set_index('sample_id', drop=True, inplace=True)
 
@@ -21,12 +26,19 @@ def process_file_from_data_converge(filename='demo_data.json',
 
     final_df = df.explode(prediction_column)
 
-    # perform log conversion; omit this step if data is already log converted
-    final_df[prediction_column] = np.log10(final_df[prediction_column].astype('float') + 1e-10)
+    if log_data:
+        final_df[prediction_column] = np.log10(final_df[prediction_column].astype('float') + 1e-10)
 
     final_df.dropna(inplace=True)
     return final_df
 
-filename = 'data/demo_data.json'
-meta_filename = 'data/YeastSTATES-CRISPR-Long-Duration-Time-Series-20191208__fc_meta.csv'
-df = process_file_from_data_converge(filename=filename,metadata_filename=meta_filename)
+
+def main():
+    filename = 'notebooks/demo_data.json'
+    meta_filename = 'notebooks/YeastSTATES-CRISPR-Long-Duration-Time-Series-20191208__meta.csv'
+    df = process_file_from_data_converge(file_name=filename, metadata_filename=meta_filename)
+    print(df)
+
+
+if __name__ == '__main__':
+    main()
