@@ -220,13 +220,13 @@ class CombinatorialDesignModel:
         return results_df
 
 
-class Host_Response_Model(CombinatorialDesignModel):
+class HostResponseModel(CombinatorialDesignModel):
 
     def __init__(self):
-        pass
+        super(CombinatorialDesignModel, self).__init__()
 
 
-class Fluorescence_Output_Model(CombinatorialDesignModel):
+class CircuitFluorescenceModel(CombinatorialDesignModel):
 
     def __init__(self):
-        pass
+        super(CombinatorialDesignModel, self).__init__()
