@@ -4,7 +4,7 @@ import inspect
 import itertools
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GroupShuffleSplit
 from sklearn.metrics import r2_score
 from scipy.stats import wasserstein_distance
 
@@ -78,8 +78,7 @@ class CombinatorialDesignModel:
         future_experiments_df = future_experiments_df[col_order]
         return future_experiments_df
 
-    def invoke_test_harness(self, train_df, test_df, pred_df,
-                            percent_data, percent_train, num_pred_conditions):
+    def invoke_test_harness(self, train_df, test_df, pred_df, percent_train, num_pred_conditions):
         if "function_that_returns_TH_model" in self.th_kwargs:
             function_that_returns_TH_model = self.th_kwargs["function_that_returns_TH_model"]
         else:
@@ -117,9 +116,9 @@ class CombinatorialDesignModel:
                            dict_of_function_parameters=dict_of_function_parameters,
                            training_data=train_df,
                            testing_data=test_df,
-                           description="CDM_run_type: {}, percent_data: {}, percent_train: {}, "
-                                       "num_pred_conditions: {}, more_info: {}".format(inspect.stack()[1][3], percent_data,
-                                                                                       percent_train, num_pred_conditions, more_info),
+                           description="CDM_run_type: {}, percent_train: {}, num_pred_conditions: {}, "
+                                       "more_info: {}".format(inspect.stack()[1][3], percent_train,
+                                                              num_pred_conditions, more_info),
                            target_cols=self.target_col,
                            feature_cols_to_use=self.exp_condition_cols,
                            index_cols=index_cols,
@@ -130,43 +129,59 @@ class CombinatorialDesignModel:
                            sparse_cols_to_use=sparse_cols_to_use)
         # return self.th.list_of_this_instance_run_ids[-1]
 
+    def condition_based_train_test_split(self, percent_train):
+        """
+        Creates train and test DataFrames based on unique combinations in self.exp_condition_cols.
+        The unique combinations of values in self.exp_condition_cols are calculated,
+        and then {percent_train}% of them are used to create train_df, and the rest are used to create test_df.
+        :param percent_train: the percentage of the condition_space to use for training data.
+        :type percent_train: int
+        :return: returns a train DataFrame and a test DataFrame
+        :rtype: pandas.DataFrame
+        """
+        train_ratio = percent_train / 100.0
+
+        exist_data = self.existing_data.copy()
+        # create group column based on self.exp_condition_cols:
+        group_col_name = "group"
+        exist_data[group_col_name] = exist_data.groupby(self.exp_condition_cols, sort=False).ngroup()
+
+        gss = GroupShuffleSplit(n_splits=1, train_size=train_ratio, random_state=5)
+        train_idx, test_idx = next(gss.split(exist_data, groups=exist_data[group_col_name]))
+        assert ((len(train_idx) + len(test_idx)) == len(exist_data) == len(self.existing_data)), \
+            "the number of train indexes and test indexes must sum up to " \
+            "the number of samples in exist_data and self.existing_data"
+        train_df = self.existing_data[self.existing_data.index.isin(train_idx)].copy()
+        test_df = self.existing_data[self.existing_data.index.isin(test_idx)].copy()
+        return train_df, test_df
+
     def run_single(self, percent_train=70):
         """
         Generates a train/test split of self.existing_data based on the passed-in percent_train amount,
         and runs a single test harness model on that split by calling self.invoke_test_harness.
         The split is stratified on self.exp_condition_cols.
         """
-        train_ratio = percent_train / 100.0
-        train_df, test_df = train_test_split(self.existing_data, train_size=train_ratio, random_state=5,
-                                             stratify=self.existing_data[self.exp_condition_cols])
+        train_df, test_df = self.condition_based_train_test_split(percent_train=percent_train)
+        # train_conditions = train_df.groupby(self.exp_condition_cols).size().reset_index().rename(columns={0: 'count'})
+        # test_conditions = test_df.groupby(self.exp_condition_cols).size().reset_index().rename(columns={0: 'count'})
+        # print("train_conditions:\n{}\n".format(train_conditions))
+        # print("test_conditions:\n{}\n".format(test_conditions))
         self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_data,
-                                 percent_data=100, percent_train=percent_train, num_pred_conditions=len(self.future_data))
+                                 percent_train=percent_train, num_pred_conditions=len(self.future_data))
 
-    def run_progressive_sampling(self, num_runs=1, start_percent=25, end_percent=100, step_size=5,
-                                 percent_train=70):
-        train_ratio = percent_train / 100.0
+    def run_progressive_sampling(self, num_runs=1, start_percent=25, end_percent=100, step_size=5):
         percent_list = list(range(start_percent, end_percent, step_size))
         if end_percent not in percent_list:
             percent_list.append(end_percent)
+        percent_list = [p for p in percent_list if 0 < p < 100]  # ensures percentages make sense
+        print(percent_list)
         print("Beginning progressive sampling over the following percentages of existing data: {}".format(percent_list))
         for run in range(num_runs):
-            for percent in percent_list:
-                if percent == 100:
-                    existing_data_sample = self.existing_data.copy()
-                else:
-                    ratio = percent / 100.0
-                    print(ratio)
-                    # the following line samples data from self.existing_data with stratification and a set random_state:
-                    existing_data_sample, _ = train_test_split(self.existing_data, train_size=ratio, random_state=5,
-                                                               stratify=self.existing_data[self.exp_condition_cols])
-
-                # now we split the existing_data_sample into train and test, with stratification and a set random_state:
-                train_df, test_df = train_test_split(existing_data_sample, train_size=train_ratio, random_state=5,
-                                                     stratify=existing_data_sample[self.exp_condition_cols])
-
+            for percent_train in percent_list:
+                train_df, test_df = self.condition_based_train_test_split(percent_train=percent_train)
                 # invoke the Test Harness with the splits we created:
                 self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_data,
-                                         percent_data=percent, percent_train=percent_train, num_pred_conditions=len(self.future_data))
+                                         percent_train=percent_train, num_pred_conditions=len(self.future_data))
             # TODO: characterizaton has yet to include calculation of knee point
 
     # validation_data goes into here
