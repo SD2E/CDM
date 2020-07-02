@@ -29,6 +29,7 @@ class CombinatorialDesignModel:
         # TODO: and read that instead of re-running test harnness
 
         self.output_path = output_path
+        self.leaderboard_query = leaderboard_query
         self.target_col = target_col
         self.th = TestHarness(output_location=self.output_path)
         self.th_kwargs = th_kwargs
@@ -38,14 +39,17 @@ class CombinatorialDesignModel:
         else:
             self.exp_condition_cols = exp_condition_cols
 
-        if leaderboard_query is None:
+        if self.leaderboard_query is None:
             # set existing_data and generate future_conditions
             self.existing_data = initial_data
             self.future_conditions = self.generate_future_experiments_df()
         else:
-            self.model_id = query_leaderboard(query=leaderboard_query, th_output_location=output_path)[Names_TH.RUN_ID]
-            # Put in code to get the path of the model and read it in once Hamed works that in
-            self.model = ""
+            self.run_id = query_leaderboard(query=self.leaderboard_query, th_output_location=output_path)[Names_TH.RUN_ID].values[0]
+            assert isinstance(self.run_id, str), "self.run_id should be a string. Got this instead: {}".format(self.run_id)
+            # # Put in code to get the path of the model and read it in once Hamed works that in
+            # self.model = ""
+
+        self.evaluation_metric = None
 
     def retrieve_future_experiments(self):
         """
@@ -188,35 +192,63 @@ class CombinatorialDesignModel:
             # TODO: characterizaton has yet to include calculation of knee point
 
     # validation_data goes into here
-    def evaluate_model(self, df, index_col_new_data, target_col_new_data, index_col_predictions_data, custom_metric=None):
+    def evaluate_predictions(self, new_df, new_df_index):
         '''
         Take in a dataframe that was produced by the experiment and compare it with the predicted dataframe
-        :param df: experiment dataframe
-        :param df: a new dataframe generated from data in the lab to compare with prediction dataframe
-        :param index_col_new_data: the index column in the new dataset
-        :param index_col_predictions_data: the index column that was used in the predictions dataset
-        :param query: query on leaderboard to see which outputs you want predicted
-        :param th_output_location: path to test harness output
-        :param loo: True/False -- is this a LOO Run
+        :param new_df: a new dataframe generated from data in the lab to compare with prediction dataframe
+        :param new_df_index: the index column in the new dataset
+        :param pred_df_index: the index column that was used in the predictions dataset
         :param classification: is this a classification or regression problem
         :param custom_metric: define a metric you want to use to compare your predictions. Can be a callable method or str
                             r2 = R^2 metric
                             emd = Earth Mover's distance
         :return: scalar performance of model
         '''
-        df_all = join_new_data_with_predictions(df, index_col_new_data, index_col_predictions_data, {Names_TH.RUN_ID: self.model_id},
-                                                self.path, loo=False, classification=False, file_type=Names_TH.PREDICTED_DATA)
-        for col in df_all.columns:
-            if '_predictions' in col:
-                pred_col = col
+        if self.leaderboard_query is None:
+            raise NotImplementedError("evaluate_predictions can only be run if the {} object is instantiated "
+                                      "with a leaderboard_query that is not None".format(self.__class__.__name__))
 
-        if custom_metric == 'r2':
-            return r2_score(df_all[pred_col], df_all[target_col_new_data])
-        elif custom_metric == 'emd':
-            return wasserstein_distance(df_all[pred_col], df_all[target_col_new_data])
+        preds_path = os.path.join(self.output_path, Names_TH.TEST_HARNESS_RESULTS_DIR, Names_TH.RUNS_DIR,
+                                  "run_{}".format(self.run_id), "{}.csv".format(Names_TH.PREDICTED_DATA))
+        print("Obtaining predictions from this location: {}".format(preds_path))
+
+        df_preds = pd.read_csv(preds_path)
+        df_preds = df_preds[self.exp_condition_cols + ["{}_predictions".format(self.target_col)]]
+        new_df = new_df[self.exp_condition_cols + [self.target_col]]
+        print(df_preds.head())
+        print()
+        print(new_df.head())
+        print()
+        df_all = pd.merge(left=df_preds, right=new_df, how="right", left_on=self.exp_condition_cols,
+                          right_on=self.exp_condition_cols)
+
+        # df_all = df_preds.merge(new_df)
+
+        # print(df_all)
+        # print()
+
+        df_all = join_new_data_with_predictions(new_df, new_df_index, N.index, {Names_TH.RUN_ID: self.run_id},
+                                                self.output_path, loo=False, classification=False, file_type=Names_TH.PREDICTED_DATA)
+
+        print(df_all)
+        print()
+
+        sys.exit(0)
+
+        for condition in df_all[self.exp_condition_cols].drop_duplicates().values:
+            column1_value = condition[0]
+            column2_value = condition[1]
+
+            print(condition)
+
+        sys.exit(0)
+
+        if self.evaluation_metric == 'r2':
+            return r2_score(df_all[pred_col], df_all[new_df_target])
+        elif self.evaluation_metric == 'emd':
+            return wasserstein_distance(df_all[pred_col], df_all[new_df_target])
         else:
-            # TODO: ensure custom metric_can take at least two arguments
-            return custom_metric(df_all[pred_col], df_all[target_col_new_data])
+            raise NotImplementedError()
 
     def rank_results(self, results_df, control_col, prediction_col, rank_name: str):
         results_df[rank_name] = results_df[prediction_col] / results_df[control_col]
