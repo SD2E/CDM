@@ -20,8 +20,11 @@ from harness.th_model_instances.hamed_models.random_forest_regression import ran
 class CombinatorialDesignModel:
     # TODO: let user define train_ratio (default to 0.7)
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
-                 exp_condition_cols=None, target_col="BL1-A",
-                 **th_kwargs):
+                 exp_condition_cols=None, target_col="BL1-A", **th_kwargs):
+        if type(self) == CombinatorialDesignModel:
+            raise Exception("CombinatorialDesignModel class may not be instantiated.\n"
+                            "Please use HostResponseModel or CircuitFluorescenceModel instead.")
+
         # TODO: build a way to check if user wants to run something that they already ran.
         # TODO: and read that instead of re-running test harnness
 
@@ -221,12 +224,16 @@ class CombinatorialDesignModel:
 
 
 class HostResponseModel(CombinatorialDesignModel):
-
-    def __init__(self):
-        super(CombinatorialDesignModel, self).__init__()
+    def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
+                 exp_condition_cols=None, target_col="logFC", evaluation_metric="r2", **th_kwargs):
+        super().__init__(initial_data, output_path, leaderboard_query,
+                         exp_condition_cols, target_col, **th_kwargs)
+        self.evaluation_metric = evaluation_metric
 
 
 class CircuitFluorescenceModel(CombinatorialDesignModel):
-
-    def __init__(self):
-        super(CombinatorialDesignModel, self).__init__()
+    def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
+                 exp_condition_cols=None, target_col="BL1-A", evaluation_metric="emd", **th_kwargs):
+        super().__init__(initial_data, output_path, leaderboard_query,
+                         exp_condition_cols, target_col, **th_kwargs)
+        self.evaluation_metric = evaluation_metric
