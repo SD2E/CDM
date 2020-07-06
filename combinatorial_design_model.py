@@ -91,6 +91,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         return future_conditions_df
 
     def invoke_test_harness(self, train_df, test_df, pred_df, percent_train, num_pred_conditions):
+        # TODO: figure out how to raise exception or warning for th_kwargs that are passed in but haven't been listed here
         if "function_that_returns_TH_model" in self.th_kwargs:
             function_that_returns_TH_model = self.th_kwargs["function_that_returns_TH_model"]
         else:
@@ -122,7 +123,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         if "sparse_cols_to_use" in self.th_kwargs:
             sparse_cols_to_use = self.th_kwargs["sparse_cols_to_use"]
         else:
-            sparse_cols_to_use = ["strain_name"]
+            sparse_cols_to_use = None
 
         self.th.run_custom(function_that_returns_TH_model=function_that_returns_TH_model,
                            dict_of_function_parameters=dict_of_function_parameters,
@@ -132,7 +133,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
                                        "more_info: {}".format(inspect.stack()[1][3], percent_train,
                                                               num_pred_conditions, more_info),
                            target_cols=self.target_col,
-                           feature_cols_to_use=self.exp_condition_cols,
+                           feature_cols_to_use=self.exp_condition_cols + [self.per_condition_index_col],
                            index_cols=index_cols,
                            normalize=normalize,
                            feature_cols_to_normalize=feature_cols_to_normalize,
@@ -186,7 +187,6 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         if end_percent not in percent_list:
             percent_list.append(end_percent)
         percent_list = [p for p in percent_list if 0 < p < 100]  # ensures percentages make sense
-        print(percent_list)
         print("Beginning progressive sampling over the following percentages of existing data: {}".format(percent_list))
         for run in range(num_runs):
             for percent_train in percent_list:
