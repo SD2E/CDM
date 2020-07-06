@@ -20,8 +20,11 @@ from harness.th_model_instances.hamed_models.random_forest_regression import ran
 class CombinatorialDesignModel:
     # TODO: let user define train_ratio (default to 0.7)
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
-                 exp_condition_cols=None, target_col="BL1-A",
-                 **th_kwargs):
+                 exp_condition_cols=None, target_col="BL1-A", **th_kwargs):
+        if type(self) == CombinatorialDesignModel:
+            raise Exception("CombinatorialDesignModel class may not be instantiated.\n"
+                            "Please use HostResponseModel or CircuitFluorescenceModel instead.")
+
         # TODO: build a way to check if user wants to run something that they already ran.
         # TODO: and read that instead of re-running test harnness
 
@@ -36,9 +39,9 @@ class CombinatorialDesignModel:
             self.exp_condition_cols = exp_condition_cols
 
         if leaderboard_query is None:
-            # the data is split into existing_data and future_data
+            # set existing_data and generate future_conditions
             self.existing_data = initial_data
-            self.future_data = self.generate_future_experiments_df()
+            self.future_conditions = self.generate_future_experiments_df()
         else:
             self.model_id = query_leaderboard(query=leaderboard_query, th_output_location=output_path)[Names_TH.RUN_ID]
             # Put in code to get the path of the model and read it in once Hamed works that in
@@ -166,8 +169,8 @@ class CombinatorialDesignModel:
         # test_conditions = test_df.groupby(self.exp_condition_cols).size().reset_index().rename(columns={0: 'count'})
         # print("train_conditions:\n{}\n".format(train_conditions))
         # print("test_conditions:\n{}\n".format(test_conditions))
-        self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_data,
-                                 percent_train=percent_train, num_pred_conditions=len(self.future_data))
+        self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_conditions,
+                                 percent_train=percent_train, num_pred_conditions=len(self.future_conditions))
 
     def run_progressive_sampling(self, num_runs=1, start_percent=25, end_percent=100, step_size=5):
         percent_list = list(range(start_percent, end_percent, step_size))
@@ -180,8 +183,8 @@ class CombinatorialDesignModel:
             for percent_train in percent_list:
                 train_df, test_df = self.condition_based_train_test_split(percent_train=percent_train)
                 # invoke the Test Harness with the splits we created:
-                self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_data,
-                                         percent_train=percent_train, num_pred_conditions=len(self.future_data))
+                self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_conditions,
+                                         percent_train=percent_train, num_pred_conditions=len(self.future_conditions))
             # TODO: characterizaton has yet to include calculation of knee point
 
     # validation_data goes into here
@@ -220,13 +223,17 @@ class CombinatorialDesignModel:
         return results_df
 
 
-class Host_Response_Model(CombinatorialDesignModel):
+class HostResponseModel(CombinatorialDesignModel):
+    def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
+                 exp_condition_cols=None, target_col="logFC", evaluation_metric="r2", **th_kwargs):
+        super().__init__(initial_data, output_path, leaderboard_query,
+                         exp_condition_cols, target_col, **th_kwargs)
+        self.evaluation_metric = evaluation_metric
 
-    def __init__(self):
-        pass
 
-
-class Fluorescence_Output_Model(CombinatorialDesignModel):
-
-    def __init__(self):
-        pass
+class CircuitFluorescenceModel(CombinatorialDesignModel):
+    def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
+                 exp_condition_cols=None, target_col="BL1-A", evaluation_metric="emd", **th_kwargs):
+        super().__init__(initial_data, output_path, leaderboard_query,
+                         exp_condition_cols, target_col, **th_kwargs)
+        self.evaluation_metric = evaluation_metric
