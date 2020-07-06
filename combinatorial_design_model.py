@@ -21,9 +21,9 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
     # TODO: let user define train_ratio (default to 0.7)
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
                  exp_condition_cols=None, target_col="BL1-A", **th_kwargs):
-        if type(self) == CombinatorialDesignModel:
-            raise Exception("CombinatorialDesignModel class may not be instantiated.\n"
-                            "Please use HostResponseModel or CircuitFluorescenceModel instead.")
+        # if type(self) == CombinatorialDesignModel:
+        #     raise Exception("CombinatorialDesignModel class may not be instantiated.\n"
+        #                     "Please use HostResponseModel or CircuitFluorescenceModel instead.")
 
         # TODO: build a way to check if user wants to run something that they already ran.
         # TODO: and read that instead of re-running test harnness
