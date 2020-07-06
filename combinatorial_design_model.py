@@ -4,10 +4,10 @@ import inspect
 import itertools
 import numpy as np
 import pandas as pd
+from abc import ABCMeta, abstractmethod
 from sklearn.model_selection import train_test_split, GroupShuffleSplit
 from sklearn.metrics import r2_score
 from scipy.stats import wasserstein_distance
-
 from names import Names as N
 from CDM_regression import CDM_regression_model
 from CDM_classification import CDM_classification_model
@@ -17,13 +17,13 @@ from harness.utils.names import Names as Names_TH
 from harness.th_model_instances.hamed_models.random_forest_regression import random_forest_regression
 
 
-class CombinatorialDesignModel:
+class CombinatorialDesignModel(metaclass=ABCMeta):
     # TODO: let user define train_ratio (default to 0.7)
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
                  exp_condition_cols=None, target_col="BL1-A", **th_kwargs):
-        if type(self) == CombinatorialDesignModel:
-            raise Exception("CombinatorialDesignModel class may not be instantiated.\n"
-                            "Please use HostResponseModel or CircuitFluorescenceModel instead.")
+        # if type(self) == CombinatorialDesignModel:
+        #     raise Exception("CombinatorialDesignModel class may not be instantiated.\n"
+        #                     "Please use HostResponseModel or CircuitFluorescenceModel instead.")
 
         # TODO: build a way to check if user wants to run something that they already ran.
         # TODO: and read that instead of re-running test harnness
@@ -40,9 +40,9 @@ class CombinatorialDesignModel:
             self.exp_condition_cols = exp_condition_cols
 
         if self.leaderboard_query is None:
-            # set existing_data and generate future_conditions
-            self.existing_data = initial_data
-            self.future_conditions = self.generate_future_experiments_df()
+            # set existing_data and generate future_data
+            self.existing_data = self.add_index_per_existing_condition(initial_data)
+            self.future_data = self.generate_future_conditions_df()
         else:
             self.run_id = query_leaderboard(query=self.leaderboard_query, th_output_location=output_path)[Names_TH.RUN_ID].values[0]
             assert isinstance(self.run_id, str), "self.run_id should be a string. Got this instead: {}".format(self.run_id)
@@ -51,9 +51,13 @@ class CombinatorialDesignModel:
 
         self.evaluation_metric = None
 
-    def retrieve_future_experiments(self):
+    @abstractmethod
+    def add_index_per_existing_condition(self, initial_data):
+        pass
+
+    def retrieve_future_conditions(self):
         """
-        computes full condition space and returns experiments that have no data and need to be predicted
+        computes full condition space and returns experimental conditions that have no data and need to be predicted
         """
         unique_column_values = []
         for col in self.exp_condition_cols:
@@ -62,28 +66,29 @@ class CombinatorialDesignModel:
             unique_column_values.append(col_unique_vals)
         permutations = set(itertools.product(*unique_column_values))
         temp_df = self.existing_data[self.exp_condition_cols].drop_duplicates()
-        existing_experiments = set(zip(*[temp_df[column].values for column in self.exp_condition_cols]))
-        future_experiments = permutations - existing_experiments
-        existing_experiments = list(existing_experiments)
-        future_experiments = list(future_experiments)
+        existing_conditions = set(zip(*[temp_df[column].values for column in self.exp_condition_cols]))
+        future_condtions = permutations - existing_conditions
+        existing_conditions = list(existing_conditions)
+        future_condtions = list(future_condtions)
 
         print('Input dataframe contains {0} conditions out of {1} possible conditions'
-              '\nThere are {2} conditions to be predicted\n'.format(len(existing_experiments),
+              '\nThere are {2} conditions to be predicted\n'.format(len(existing_conditions),
                                                                     len(permutations),
-                                                                    len(future_experiments)))
-        return future_experiments
+                                                                    len(future_condtions)))
+        return future_condtions
 
-    def generate_future_experiments_df(self):
+    @abstractmethod
+    def add_index_per_future_condition(self, future_conditions):
+        pass
+
+    def generate_future_conditions_df(self):
         """
-        generates and returns a dataframe of experiments that lack data
+        generates and returns a dataframe of experimental conditions that lack data
         """
-        future_experiments = self.retrieve_future_experiments()
-        future_experiments_df = pd.DataFrame(future_experiments, columns=self.exp_condition_cols)
-        future_experiments_df[N.index] = future_experiments_df.index
-        col_order = list(future_experiments_df.columns.values)
-        col_order.insert(0, col_order.pop(col_order.index(N.index)))
-        future_experiments_df = future_experiments_df[col_order]
-        return future_experiments_df
+        future_conditions = self.retrieve_future_conditions()
+        future_conditions_df = self.add_index_per_future_condition(future_conditions)
+
+        return future_conditions_df
 
     def invoke_test_harness(self, train_df, test_df, pred_df, percent_train, num_pred_conditions):
         if "function_that_returns_TH_model" in self.th_kwargs:
@@ -101,7 +106,7 @@ class CombinatorialDesignModel:
         if "index_cols" in self.th_kwargs:
             index_cols = self.th_kwargs["index_cols"]
         else:
-            index_cols = [N.index] + self.exp_condition_cols
+            index_cols = self.exp_condition_cols
         if "normalize" in self.th_kwargs:
             normalize = self.th_kwargs["normalize"]
         else:
@@ -173,8 +178,8 @@ class CombinatorialDesignModel:
         # test_conditions = test_df.groupby(self.exp_condition_cols).size().reset_index().rename(columns={0: 'count'})
         # print("train_conditions:\n{}\n".format(train_conditions))
         # print("test_conditions:\n{}\n".format(test_conditions))
-        self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_conditions,
-                                 percent_train=percent_train, num_pred_conditions=len(self.future_conditions))
+        self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_data,
+                                 percent_train=percent_train, num_pred_conditions=len(self.future_data))
 
     def run_progressive_sampling(self, num_runs=1, start_percent=25, end_percent=100, step_size=5):
         percent_list = list(range(start_percent, end_percent, step_size))
@@ -187,8 +192,8 @@ class CombinatorialDesignModel:
             for percent_train in percent_list:
                 train_df, test_df = self.condition_based_train_test_split(percent_train=percent_train)
                 # invoke the Test Harness with the splits we created:
-                self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_conditions,
-                                         percent_train=percent_train, num_pred_conditions=len(self.future_conditions))
+                self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_data,
+                                         percent_train=percent_train, num_pred_conditions=len(self.future_data))
             # TODO: characterizaton has yet to include calculation of knee point
 
     # validation_data goes into here
@@ -257,15 +262,79 @@ class CombinatorialDesignModel:
 
 class HostResponseModel(CombinatorialDesignModel):
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
-                 exp_condition_cols=None, target_col="logFC", evaluation_metric="r2", **th_kwargs):
+                 exp_condition_cols=None, target_col="logFC", gene_col="gene", evaluation_metric="r2", **th_kwargs):
+        self.per_condition_index_col = gene_col
         super().__init__(initial_data, output_path, leaderboard_query,
                          exp_condition_cols, target_col, **th_kwargs)
         self.evaluation_metric = evaluation_metric
+
+    def add_index_per_existing_condition(self, initial_data):
+        """
+        This intentionally doesn't do anything because HostResponseModel data already has genes in it.
+        """
+        return initial_data
+
+    def add_index_per_future_condition(self, future_conditions):
+        """
+        In this HostResponseModel, this method will add all the genes that exist in the self.existing_data to
+        the self.future_data DataFrame. For each condition in future_conditions, all genes are combined with
+        that condition, making each row a combination of conditions and gene.
+        :param future_conditions: a list of future conditions returned from the self.retrieve_future_conditions method
+        :type future_conditions: list
+        :return: DataFrame with all the combinations of experimental conditions and genes
+        :rtype: Pandas DataFrame
+        """
+        future_conditions_df = pd.DataFrame(future_conditions, columns=self.exp_condition_cols)
+        unique_genes = self.existing_data[self.per_condition_index_col].unique().tolist()
+        future_conditions_df[self.per_condition_index_col] = [unique_genes for i in range(len(future_conditions_df))]
+        future_conditions_df = future_conditions_df.explode(self.per_condition_index_col).reset_index(drop=True)
+        return future_conditions_df
 
 
 class CircuitFluorescenceModel(CombinatorialDesignModel):
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
-                 exp_condition_cols=None, target_col="BL1-A", evaluation_metric="emd", **th_kwargs):
+                 exp_condition_cols=None, target_col="BL1-A", num_per_condition_indices=20000, evaluation_metric="emd", **th_kwargs):
+        self.per_condition_index_col = "dist_position"
+        self.num_per_condition_indices = num_per_condition_indices
         super().__init__(initial_data, output_path, leaderboard_query,
                          exp_condition_cols, target_col, **th_kwargs)
         self.evaluation_metric = evaluation_metric
+
+    def add_index_per_existing_condition(self, initial_data):
+        """
+        Samples the data for each condition and assigns a dist_position index to each row based on its value of self.target_col.
+        Rows with smaller self.target_col values are assigned smaller dist_position values.
+        dist_position stands for position of a row's self.target_col value in the distribution
+        of self.target_col values for any combination of experimental conditions.
+        :param initial_data: DataFrame of the original data.
+        :type initial_data: Pandas DataFrame
+        :return: DataFrame with equal amounts of rows per experimental condition, with each row having a dist_position index.
+        :rtype: Pandas DataFrame
+        """
+        # sample 20,000 points with replacement from each group
+        sampled_df = initial_data.groupby(self.exp_condition_cols).apply(lambda x: x.sample(n=self.num_per_condition_indices, replace=True))
+        sampled_df.reset_index(drop=True, inplace=True)
+
+        sampled_df = sampled_df.groupby(self.exp_condition_cols).apply(lambda x: x.sort_values(by=self.target_col, na_position='first'))
+        sampled_df.reset_index(drop=True, inplace=True)
+
+        sampled_df[self.per_condition_index_col] = sampled_df.groupby(self.exp_condition_cols).cumcount()
+
+        return sampled_df
+
+    def add_index_per_future_condition(self, future_conditions):
+        """
+        In this CircuitFluorescenceModel, this method will add n indices to each experimental condition,
+        where n is determined from self.num_per_condition_indices.
+        For each condition in future_conditions, the indices are combined with that condition,
+        making each row a combination of experimental conditions and index.
+        :param future_conditions: a list of future conditions returned from the self.retrieve_future_conditions method
+        :type future_conditions: list
+        :return: DataFrame with all the combinations of experimental conditions and accompanying indices
+        :rtype: Pandas DataFrame
+        """
+        future_conditions_df = pd.DataFrame(future_conditions, columns=self.exp_condition_cols)
+        future_conditions_df = future_conditions_df.iloc[future_conditions_df.index.repeat(
+            self.num_per_condition_indices)].reset_index(drop=True)
+        future_conditions_df[N.dist_position] = future_conditions_df.groupby(self.exp_condition_cols).cumcount()
+        return future_conditions_df
