@@ -1,6 +1,7 @@
 import os
 import sys
 import inspect
+import warnings
 import itertools
 import numpy as np
 import pandas as pd
@@ -26,9 +27,10 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         #                     "Please use HostResponseModel or CircuitFluorescenceModel instead.")
 
         # TODO: build a way to check if user wants to run something that they already ran.
-        # TODO: and read that instead of re-running test harnness
+        # TODO: and read that instead of re-running test harness
 
         self.output_path = output_path
+        self.leaderboard_query = leaderboard_query
         self.target_col = target_col
         self.th = TestHarness(output_location=self.output_path)
         self.th_kwargs = th_kwargs
@@ -37,15 +39,31 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
             self.exp_condition_cols = ["strain_name", "inducer_concentration_mM"]
         else:
             self.exp_condition_cols = exp_condition_cols
+        self.feature_and_index_cols = self.exp_condition_cols + [self.per_condition_index_col]
 
-        if leaderboard_query is None:
+        if self.leaderboard_query is None:
             # set existing_data and generate future_data
             self.existing_data = self.add_index_per_existing_condition(initial_data)
             self.future_data = self.generate_future_conditions_df()
         else:
-            self.model_id = query_leaderboard(query=leaderboard_query, th_output_location=output_path)[Names_TH.RUN_ID]
+            query_matches = query_leaderboard(query=self.leaderboard_query, th_output_location=output_path)
+            num_matches = len(query_matches)
+            if num_matches < 1:
+                raise Exception("No leaderboard rows match the query you provided. Here's what the leaderboard looks like:\n"
+                                "{}".format(query_leaderboard(query={}, th_output_location=output_path)))
+            elif num_matches > 1:
+                warnings.warn("Your leaderboard query returned {} row matches. "
+                              "Only the first match will be used... Here are the matching rows:".format(num_matches),
+                              stacklevel=100000)
+            else:
+                print("Your leaderboard query matched the following row:")
+            print(query_matches, "\n")
+            run_ids = query_matches[Names_TH.RUN_ID].values
+            self.run_id = run_ids[0]
+            print("The run_id for the Test Harness run being read-in is: {}".format(self.run_id))
+            assert isinstance(self.run_id, str), "self.run_id should be a string. Got this instead: {}".format(self.run_id)
             # Put in code to get the path of the model and read it in once Hamed works that in
-            self.model = ""
+            # self.model = ""
 
     @abstractmethod
     def add_index_per_existing_condition(self, initial_data):
@@ -87,6 +105,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         return future_conditions_df
 
     def invoke_test_harness(self, train_df, test_df, pred_df, percent_train, num_pred_conditions):
+        # TODO: figure out how to raise exception or warning for th_kwargs that are passed in but haven't been listed here
         if "function_that_returns_TH_model" in self.th_kwargs:
             function_that_returns_TH_model = self.th_kwargs["function_that_returns_TH_model"]
         else:
@@ -102,7 +121,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         if "index_cols" in self.th_kwargs:
             index_cols = self.th_kwargs["index_cols"]
         else:
-            index_cols = self.exp_condition_cols
+            index_cols = self.feature_and_index_cols
         if "normalize" in self.th_kwargs:
             normalize = self.th_kwargs["normalize"]
         else:
@@ -118,7 +137,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         if "sparse_cols_to_use" in self.th_kwargs:
             sparse_cols_to_use = self.th_kwargs["sparse_cols_to_use"]
         else:
-            sparse_cols_to_use = ["strain_name"]
+            sparse_cols_to_use = None
 
         self.th.run_custom(function_that_returns_TH_model=function_that_returns_TH_model,
                            dict_of_function_parameters=dict_of_function_parameters,
@@ -128,7 +147,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
                                        "more_info: {}".format(inspect.stack()[1][3], percent_train,
                                                               num_pred_conditions, more_info),
                            target_cols=self.target_col,
-                           feature_cols_to_use=self.exp_condition_cols,
+                           feature_cols_to_use=self.feature_and_index_cols,
                            index_cols=index_cols,
                            normalize=normalize,
                            feature_cols_to_normalize=feature_cols_to_normalize,
@@ -182,7 +201,6 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         if end_percent not in percent_list:
             percent_list.append(end_percent)
         percent_list = [p for p in percent_list if 0 < p < 100]  # ensures percentages make sense
-        print(percent_list)
         print("Beginning progressive sampling over the following percentages of existing data: {}".format(percent_list))
         for run in range(num_runs):
             for percent_train in percent_list:
@@ -192,49 +210,64 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
                                          percent_train=percent_train, num_pred_conditions=len(self.future_data))
             # TODO: characterizaton has yet to include calculation of knee point
 
-    # validation_data goes into here
-    def evaluate_model(self, df, index_col_new_data, target_col_new_data, index_col_predictions_data, custom_metric=None):
+    @abstractmethod
+    def align_predictions_with_new_data(self, predictions_df, new_data_df):
+        """
+        This method should align and merge the DataFrame of previous predictions with the DataFrame of new experimental data.
+        This method should be implemented in the HRM and CFM subclasses.
+        """
+
+    @abstractmethod
+    def score(self, x, y):
+        """This method will score the agreement between two lists of numbers, using metrics such as R^2 or EMD"""
+
+    def rank_results(self, results_df, control_col, prediction_col, rank_name: str):
+        """
+        Currently sorts the rows based on how close the predictions were to the "controls"
+        """
+        results_df[rank_name] = abs((results_df[prediction_col] / results_df[control_col]) - 1)
+        results_df.sort_values(by=rank_name, inplace=True)
+        return results_df
+
+    def evaluate_predictions(self, new_data_df):
         '''
         Take in a dataframe that was produced by the experiment and compare it with the predicted dataframe
-        :param df: experiment dataframe
-        :param df: a new dataframe generated from data in the lab to compare with prediction dataframe
-        :param index_col_new_data: the index column in the new dataset
-        :param index_col_predictions_data: the index column that was used in the predictions dataset
-        :param query: query on leaderboard to see which outputs you want predicted
-        :param th_output_location: path to test harness output
-        :param loo: True/False -- is this a LOO Run
+        :param new_data_df: a new dataframe generated from data in the lab to compare with prediction dataframe
+        :param new_df_index: the index column in the new dataset
+        :param pred_df_index: the index column that was used in the predictions dataset
         :param classification: is this a classification or regression problem
         :param custom_metric: define a metric you want to use to compare your predictions. Can be a callable method or str
                             r2 = R^2 metric
                             emd = Earth Mover's distance
         :return: scalar performance of model
         '''
-        df_all = join_new_data_with_predictions(df, index_col_new_data, index_col_predictions_data, {Names_TH.RUN_ID: self.model_id},
-                                                self.path, loo=False, classification=False, file_type=Names_TH.PREDICTED_DATA)
-        for col in df_all.columns:
-            if '_predictions' in col:
-                pred_col = col
+        if self.leaderboard_query is None:
+            raise NotImplementedError("evaluate_predictions can only be run if the {} object is instantiated "
+                                      "with a leaderboard_query that is not None".format(self.__class__.__name__))
 
-        if custom_metric == 'r2':
-            return r2_score(df_all[pred_col], df_all[target_col_new_data])
-        elif custom_metric == 'emd':
-            return wasserstein_distance(df_all[pred_col], df_all[target_col_new_data])
-        else:
-            # TODO: ensure custom metric_can take at least two arguments
-            return custom_metric(df_all[pred_col], df_all[target_col_new_data])
+        preds_path = os.path.join(self.output_path, Names_TH.TEST_HARNESS_RESULTS_DIR, Names_TH.RUNS_DIR,
+                                  "run_{}".format(self.run_id), "{}.csv".format(Names_TH.PREDICTED_DATA))
 
-    def rank_results(self, results_df, control_col, prediction_col, rank_name: str):
-        results_df[rank_name] = results_df[prediction_col] / results_df[control_col]
-        return results_df
+        print("Obtaining predictions from this location: {}\n".format(preds_path))
+
+        df_preds = pd.read_csv(preds_path)
+        target_pred_col = "{}_predictions".format(self.target_col)
+        df_preds = df_preds[self.feature_and_index_cols + [target_pred_col]]
+        combined_df = self.align_predictions_with_new_data(predictions_df=df_preds, new_data_df=new_data_df)
+
+        ranked_results = self.rank_results(results_df=combined_df, control_col=self.target_col,
+                                           prediction_col=target_pred_col, rank_name="ratio_based_ranking")
+
+        score = self.score(x=combined_df[self.target_col], y=combined_df[target_pred_col])
+        return score
 
 
 class HostResponseModel(CombinatorialDesignModel):
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
-                 exp_condition_cols=None, target_col="logFC", gene_col="gene", evaluation_metric="r2", **th_kwargs):
+                 exp_condition_cols=None, target_col="logFC", gene_col="gene", **th_kwargs):
         self.per_condition_index_col = gene_col
         super().__init__(initial_data, output_path, leaderboard_query,
                          exp_condition_cols, target_col, **th_kwargs)
-        self.evaluation_metric = evaluation_metric
 
     def add_index_per_existing_condition(self, initial_data):
         """
@@ -258,15 +291,31 @@ class HostResponseModel(CombinatorialDesignModel):
         future_conditions_df = future_conditions_df.explode(self.per_condition_index_col).reset_index(drop=True)
         return future_conditions_df
 
+    def align_predictions_with_new_data(self, predictions_df, new_data_df):
+        new_data_df = new_data_df[self.feature_and_index_cols + [self.target_col]]
+        merged_df = pd.merge(new_data_df, predictions_df, how="inner",
+                             on=self.feature_and_index_cols)
+        len_preds = len(predictions_df)
+        len_new_data = len(new_data_df)
+        len_merged = len(merged_df)
+        print("Use the following print lines to ensure the inner merge is working correctly...")
+        print("len(predictions_df): {}\n"
+              "len(new_data_df): {}\n"
+              "len(merged_df): {}\n".format(len_preds, len_new_data, len_merged))
+        return merged_df
+
+    def score(self, x, y):
+        return r2_score(x, y)
+
 
 class CircuitFluorescenceModel(CombinatorialDesignModel):
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
-                 exp_condition_cols=None, target_col="BL1-A", num_per_condition_indices=20000, evaluation_metric="emd", **th_kwargs):
+                 exp_condition_cols=None, target_col="BL1-A", num_per_condition_indices=20000,
+                 **th_kwargs):
         self.per_condition_index_col = "dist_position"
         self.num_per_condition_indices = num_per_condition_indices
         super().__init__(initial_data, output_path, leaderboard_query,
                          exp_condition_cols, target_col, **th_kwargs)
-        self.evaluation_metric = evaluation_metric
 
     def add_index_per_existing_condition(self, initial_data):
         """
@@ -280,10 +329,12 @@ class CircuitFluorescenceModel(CombinatorialDesignModel):
         :rtype: Pandas DataFrame
         """
         # sample 20,000 points with replacement from each group
-        sampled_df = initial_data.groupby(self.exp_condition_cols).apply(lambda x: x.sample(n=self.num_per_condition_indices, replace=True))
+        sampled_df = initial_data.groupby(self.exp_condition_cols).apply(
+            lambda x: x.sample(n=self.num_per_condition_indices, replace=True))
         sampled_df.reset_index(drop=True, inplace=True)
 
-        sampled_df = sampled_df.groupby(self.exp_condition_cols).apply(lambda x: x.sort_values(by=self.target_col, na_position='first'))
+        sampled_df = sampled_df.groupby(self.exp_condition_cols).apply(
+            lambda x: x.sort_values(by=self.target_col, na_position='first'))
         sampled_df.reset_index(drop=True, inplace=True)
 
         sampled_df[self.per_condition_index_col] = sampled_df.groupby(self.exp_condition_cols).cumcount()
@@ -306,3 +357,41 @@ class CircuitFluorescenceModel(CombinatorialDesignModel):
             self.num_per_condition_indices)].reset_index(drop=True)
         future_conditions_df[N.dist_position] = future_conditions_df.groupby(self.exp_condition_cols).cumcount()
         return future_conditions_df
+
+    def align_predictions_with_new_data(self, predictions_df, new_data_df):
+        new_data_df = new_data_df[self.exp_condition_cols + [self.target_col]]
+        sampled_new_df_with_dist_position = self.add_index_per_existing_condition(new_data_df)
+        col_order = self.feature_and_index_cols + [self.target_col]
+        sampled_new_df_with_dist_position = sampled_new_df_with_dist_position[col_order]
+
+        # This code block is for rounding float columns in our two DataFrames.
+        # We need to do this because otherwise floating-point errors will affect our merge in an undesirable way.
+        # I.e. when merging, Pandas will think 0.00006 in one DataFrame is different form 0.00006 in the other DataFrame.
+        float_cols_1 = sampled_new_df_with_dist_position[self.feature_and_index_cols].select_dtypes(include=[float]).columns.values
+        float_cols_2 = predictions_df[self.feature_and_index_cols].select_dtypes(include=[float]).columns.values
+        if set(float_cols_1) != set(float_cols_2):
+            warnings.warn("float_cols_1 is not the same as float_cols_2 !", stacklevel=100000)
+        sampled_new_df_with_dist_position[float_cols_1] = sampled_new_df_with_dist_position[float_cols_1].round(10)
+        predictions_df[float_cols_2] = predictions_df[float_cols_2].round(10)
+
+        merged_df = pd.merge(sampled_new_df_with_dist_position, predictions_df,
+                             how="inner", on=self.feature_and_index_cols)
+        len_preds = len(predictions_df)
+        len_new_data = len(new_data_df)
+        len_sampled_df = len(sampled_new_df_with_dist_position)
+        len_merged = len(merged_df)
+        print("Use the following print lines to ensure the inner merge is working correctly...")
+        print("len(predictions_df): {}\n"
+              "len(new_data_df): {}\n"
+              "len(sampled_new_df_with_dist_position): {}\n"
+              "len(merged_df): {}\n".format(len_preds, len_new_data,
+                                            len_sampled_df, len_merged))
+        if not (len_merged == len_sampled_df == len_new_data == len_preds):
+            warnings.warn("These 4 DataFrames are not equal in length: "
+                          "merged_df, sampled_new_df_with_dist_position, new_data_df, predictions_df\n",
+                          stacklevel=100000)
+
+        return merged_df
+
+    def score(self, x, y):
+        return wasserstein_distance(x, y)
