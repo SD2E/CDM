@@ -1,10 +1,13 @@
 import os
 import sys
+import time
 import inspect
 import warnings
 import itertools
 import numpy as np
 import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
 from abc import ABCMeta, abstractmethod
 from sklearn.model_selection import train_test_split, GroupShuffleSplit
 from sklearn.metrics import r2_score
@@ -29,7 +32,8 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         # TODO: build a way to check if user wants to run something that they already ran.
         # TODO: and read that instead of re-running test harness
 
-        self.output_path = output_path
+        self.output_path = os.path.join(output_path, "cdm_outputs")
+        os.makedirs(self.output_path, exist_ok=True)
         self.leaderboard_query = leaderboard_query
         self.target_col = target_col
         self.th = TestHarness(output_location=self.output_path)
@@ -395,3 +399,54 @@ class CircuitFluorescenceModel(CombinatorialDesignModel):
 
     def score(self, x, y):
         return wasserstein_distance(x, y)
+
+    # Data quality methods
+    def replicate_emd_heatmap(self):
+        """
+        Creates heatmap of EMD values between the target_col of replicates for each condition.
+        Saves the generated matrix as a csv, the heatmap as a png, and an index map table as a csv in a replicate_emd_heatmap folder.
+
+        Note that this code is kind of slow, there's probably a faster way to do it using Pandas corr,
+        but that requires transforming the current DataFrame into a different shape (like a pivot table).
+        :return:
+        :rtype:
+        """
+        df = self.existing_data.copy()
+        conds_and_rep_cols = self.exp_condition_cols + ["replicate"]
+        unique_conds_and_reps = df[conds_and_rep_cols].drop_duplicates().reset_index(drop=True)
+        # print(df.groupby(conds_and_rep_cols, as_index=False).size(), "\n")
+
+        start_time = time.time()
+        matrix = pd.DataFrame(columns=range(72), index=range(72))
+        for idx1, conds_and_rep_1 in unique_conds_and_reps.iterrows():
+            mask_1 = (df[conds_and_rep_cols] == conds_and_rep_1).all(axis=1)
+            target_1 = df.loc[mask_1, self.target_col]
+
+            for idx2, conds_and_rep_2 in unique_conds_and_reps.iterrows():
+                mask_2 = (df[conds_and_rep_cols] == conds_and_rep_2).all(axis=1)
+                target_2 = df.loc[mask_2, self.target_col]
+
+                emd = wasserstein_distance(target_1, target_2)
+                matrix[idx1][idx2] = float(emd)
+                print("\rCurrent index (max is 71_71): ", "{}_{}".format(idx1, idx2), end="", flush=True)
+        print("\rEMD matrix creation took {} seconds".format(round(time.time() - start_time, 2)))
+        matrix = matrix.astype(float)
+
+        method_name = str(inspect.stack()[0][3])
+        heatmap_output_dir = os.path.join(self.output_path, method_name)
+        os.makedirs(heatmap_output_dir, exist_ok=True)
+
+        # write out matrix
+        matrix.to_csv(os.path.join(heatmap_output_dir, "replicate_emd_matrix.csv"),
+                      index=True)
+
+        # write out key table that maps heatmap indices to conditions and replicates
+        unique_conds_and_reps.to_csv(os.path.join(heatmap_output_dir, "heatmap_index_map.csv"),
+                                     index=True, index_label="heatmap_index")
+
+        # write out heatmap
+        heatmap = sns.heatmap(matrix, xticklabels=True, yticklabels=True, cmap="Greens_r")
+        heatmap.set_title('EMD Heatmap Between Conditions and Replicates')
+        heatmap.set_xticklabels(heatmap.get_xmajorticklabels(), rotation=90, fontsize=4)
+        heatmap.set_yticklabels(heatmap.get_ymajorticklabels(), rotation=0, fontsize=4)
+        plt.savefig(os.path.join(heatmap_output_dir, "{}.png".format(method_name)), dpi=200)
