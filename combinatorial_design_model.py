@@ -143,7 +143,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         else:
             sparse_cols_to_use = None
         if len(pred_df) == 0:
-            pred_df = None
+            pred_df = False
 
         self.th.run_custom(function_that_returns_TH_model=function_that_returns_TH_model,
                            dict_of_function_parameters=dict_of_function_parameters,
