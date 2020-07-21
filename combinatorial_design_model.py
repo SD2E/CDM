@@ -22,15 +22,18 @@ from harness.th_model_instances.hamed_models.random_forest_regression import ran
 
 
 class CombinatorialDesignModel(metaclass=ABCMeta):
-    # TODO: let user define train_ratio (default to 0.7)
+    # TODO: build a way to check if user wants to run something that they already ran.
+    # TODO: and read that instead of re-running test harness
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
                  exp_condition_cols=None, target_col="BL1-A", **th_kwargs):
         # if type(self) == CombinatorialDesignModel:
         #     raise Exception("CombinatorialDesignModel class may not be instantiated.\n"
         #                     "Please use HostResponseModel or CircuitFluorescenceModel instead.")
 
-        # TODO: build a way to check if user wants to run something that they already ran.
-        # TODO: and read that instead of re-running test harness
+        try:
+            trying = self.replicate_col
+        except:
+            self.replicate_col = None
 
         self.output_path = os.path.join(output_path, "cdm_outputs")
         os.makedirs(self.output_path, exist_ok=True)
@@ -50,11 +53,11 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
             self.existing_data = self.add_index_per_existing_condition(initial_data)
             self.future_data = self.generate_future_conditions_df()
         else:
-            query_matches = query_leaderboard(query=self.leaderboard_query, th_output_location=output_path)
+            query_matches = query_leaderboard(query=self.leaderboard_query, th_output_location=self.output_path)
             num_matches = len(query_matches)
             if num_matches < 1:
                 raise Exception("No leaderboard rows match the query you provided. Here's what the leaderboard looks like:\n"
-                                "{}".format(query_leaderboard(query={}, th_output_location=output_path)))
+                                "{}".format(query_leaderboard(query={}, th_output_location=self.output_path)))
             elif num_matches > 1:
                 warnings.warn("Your leaderboard query returned {} row matches. "
                               "Only the first match will be used... Here are the matching rows:".format(num_matches),
@@ -106,9 +109,29 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         future_conditions = self.retrieve_future_conditions()
         future_conditions_df = self.add_index_per_future_condition(future_conditions)
 
+        # I have to create an replicate column filled with Nones because otherwise
+        # I can't use it as an index_col in invoke_test_harness
+        if self.replicate_col is not None:
+            future_conditions_df[self.replicate_col] = None
+
         return future_conditions_df
 
     def invoke_test_harness(self, train_df, test_df, pred_df, percent_train, num_pred_conditions):
+        """
+        Invokes Test Harness.
+        :param train_df:
+        :type train_df:
+        :param test_df:
+        :type test_df:
+        :param pred_df:
+        :type pred_df:
+        :param percent_train:
+        :type percent_train:
+        :param num_pred_conditions:
+        :type num_pred_conditions:
+        :return: the run_id of the run that was invoked
+        :rtype: str
+        """
         # TODO: figure out how to raise exception or warning for th_kwargs that are passed in but haven't been listed here
         if "function_that_returns_TH_model" in self.th_kwargs:
             function_that_returns_TH_model = self.th_kwargs["function_that_returns_TH_model"]
@@ -125,7 +148,10 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         if "index_cols" in self.th_kwargs:
             index_cols = self.th_kwargs["index_cols"]
         else:
-            index_cols = self.feature_and_index_cols
+            if self.replicate_col is None:
+                index_cols = self.feature_and_index_cols
+            else:
+                index_cols = [self.replicate_col] + self.feature_and_index_cols
         if "normalize" in self.th_kwargs:
             normalize = self.th_kwargs["normalize"]
         else:
@@ -158,7 +184,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
                            feature_extraction=feature_extraction,
                            predict_untested_data=pred_df,
                            sparse_cols_to_use=sparse_cols_to_use)
-        # return self.th.list_of_this_instance_run_ids[-1]
+        return self.th.list_of_this_instance_run_ids[-1]
 
     def condition_based_train_test_split(self, percent_train):
         """
@@ -197,8 +223,20 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         # test_conditions = test_df.groupby(self.exp_condition_cols).size().reset_index().rename(columns={0: 'count'})
         # print("train_conditions:\n{}\n".format(train_conditions))
         # print("test_conditions:\n{}\n".format(test_conditions))
-        self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_data,
-                                 percent_train=percent_train, num_pred_conditions=len(self.future_data))
+        run_id = self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_data,
+                                          percent_train=percent_train, num_pred_conditions=len(self.future_data))
+
+        # TODO: turn this code block into a helper method since it's used multiple times?
+        run_id_path = os.path.join(self.output_path, Names_TH.TEST_HARNESS_RESULTS_DIR,
+                                   Names_TH.RUNS_DIR, "run_{}".format(run_id))
+        test_path = os.path.join(run_id_path, "{}.csv".format(Names_TH.TESTING_DATA))
+        print("Obtaining test data from this location: {}\n".format(test_path))
+        df_test = pd.read_csv(test_path)
+
+        if self.replicate_col is None:
+            self._evaluate_predictions_per_condition(results_df=df_test, run_id_path=run_id_path, replicates=False)
+        else:
+            self._evaluate_predictions_per_condition(results_df=df_test, run_id_path=run_id_path, replicates=True)
 
     def run_progressive_sampling(self, num_runs=1, start_percent=25, end_percent=100, step_size=5):
         percent_list = list(range(start_percent, end_percent, step_size))
@@ -210,8 +248,19 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
             for percent_train in percent_list:
                 train_df, test_df = self.condition_based_train_test_split(percent_train=percent_train)
                 # invoke the Test Harness with the splits we created:
-                self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_data,
-                                         percent_train=percent_train, num_pred_conditions=len(self.future_data))
+                run_id = self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_data,
+                                                  percent_train=percent_train, num_pred_conditions=len(self.future_data))
+                run_id_path = os.path.join(self.output_path, Names_TH.TEST_HARNESS_RESULTS_DIR,
+                                           Names_TH.RUNS_DIR, "run_{}".format(run_id))
+                test_path = os.path.join(run_id_path, "{}.csv".format(Names_TH.TESTING_DATA))
+                print("Obtaining test data from this location: {}\n".format(test_path))
+                df_test = pd.read_csv(test_path)
+
+                if self.replicate_col is None:
+                    self._evaluate_predictions_per_condition(results_df=df_test, run_id_path=run_id_path, replicates=False)
+                else:
+                    self._evaluate_predictions_per_condition(results_df=df_test, run_id_path=run_id_path, replicates=True)
+
             # TODO: characterizaton has yet to include calculation of knee point
 
     @abstractmethod
@@ -233,8 +282,8 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         results_df.sort_values(by=rank_name, inplace=True)
         return results_df
 
-    def evaluate_predictions(self, new_data_df):
-        '''
+    def evaluate_predictions(self, new_data_df, agg_replicates=False):
+        """
         Take in a dataframe that was produced by the experiment and compare it with the predicted dataframe
         :param new_data_df: a new dataframe generated from data in the lab to compare with prediction dataframe
         :param new_df_index: the index column in the new dataset
@@ -244,13 +293,14 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
                             r2 = R^2 metric
                             emd = Earth Mover's distance
         :return: scalar performance of model
-        '''
+        """
         if self.leaderboard_query is None:
             raise NotImplementedError("evaluate_predictions can only be run if the {} object is instantiated "
                                       "with a leaderboard_query that is not None".format(self.__class__.__name__))
 
-        preds_path = os.path.join(self.output_path, Names_TH.TEST_HARNESS_RESULTS_DIR, Names_TH.RUNS_DIR,
-                                  "run_{}".format(self.run_id), "{}.csv".format(Names_TH.PREDICTED_DATA))
+        run_id_path = os.path.join(self.output_path, Names_TH.TEST_HARNESS_RESULTS_DIR,
+                                   Names_TH.RUNS_DIR, "run_{}".format(self.run_id))
+        preds_path = os.path.join(run_id_path, "{}.csv".format(Names_TH.PREDICTED_DATA))
 
         print("Obtaining predictions from this location: {}\n".format(preds_path))
 
@@ -259,11 +309,116 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         df_preds = df_preds[self.feature_and_index_cols + [target_pred_col]]
         combined_df = self.align_predictions_with_new_data(predictions_df=df_preds, new_data_df=new_data_df)
 
+        if self.replicate_col is None:
+            self._evaluate_predictions_per_condition(results_df=combined_df, run_id_path=run_id_path, replicates=False)
+        elif agg_replicates is True:
+            self._evaluate_predictions_per_condition(results_df=combined_df, run_id_path=run_id_path, replicates='agg')
+        elif agg_replicates is False:
+            self._evaluate_predictions_per_condition(results_df=combined_df, run_id_path=run_id_path, replicates=True)
+        else:
+            raise ValueError()
+
         ranked_results = self.rank_results(results_df=combined_df, control_col=self.target_col,
                                            prediction_col=target_pred_col, rank_name="ratio_based_ranking")
 
         score = self.score(x=combined_df[self.target_col], y=combined_df[target_pred_col])
         return score
+
+    def _evaluate_predictions_per_condition(self, results_df, run_id_path, replicates=True):
+        """
+        This private method is called by run_single, run_progressive_sampling, and evaluate_predictions.
+        Evaluates predictions per condition (and replicate if applicable). Saves 3 files:
+        1. Heatmap of each condition's predictions vs. the experimental values for self.target_col.
+            - Rows represent experimental data for each condition.
+                - This includes a row for each replicate if replicate == True.
+                - If replicate == 'agg', then values are averaged over replicates for each condition.
+                - If replicate == False, then replicates are ignored.
+            - Columns represent predictions for each condition.
+            - Heatmap values are EMD between rows and columns.
+        2. Box and whisker grid.
+        3. Summary table csv of performance per condition.
+
+        :param results_df: DataFrame with both experimental and predicted values for self.target_col.
+                           Should also have self.exp_condition_cols and self.replicate_col in it too.
+        :type results_df: Pandas DataFrame
+        :param run_id_path: path to the run_id where we got our test or untested data from.
+                            We want to output to here.
+        :type run_id_path: str
+        :param replicates: Indicates if replicates should be taken into account.
+                           'agg' will aggregate replicates for the heatmap portion by taking their mean.
+        :type replicates: True, False, or 'agg'
+        """
+        assert (replicates is True) or (replicates is False) or (replicates == "agg"), \
+            "replicates must be True, False, or 'agg'"
+
+        # we want to output our results to the same Test Harness run_id folder that was q
+        caller = inspect.stack()[1][3]
+        if caller == "evaluate_predictions":
+            test_or_pred_data = "predicted_data"
+        else:
+            test_or_pred_data = "test_data"
+        heatmap_output_dir = os.path.join(run_id_path, "predictions_per_condition_heatmap", test_or_pred_data)
+        os.makedirs(heatmap_output_dir, exist_ok=True)
+
+        df = results_df.copy()
+
+        # *************************************** Heatmap Creation Section ***************************************
+
+        unique_conds = df[self.exp_condition_cols].drop_duplicates().reset_index(drop=True)
+
+        # set variables related to heatmap length
+        heatmap_length = len(unique_conds)
+        length_groups = unique_conds
+        length_cols = self.exp_condition_cols
+
+        # set variables related to heatmap height
+        if (replicates is False) or (replicates == "agg"):
+            heatmap_height = len(unique_conds)
+            height_groups = unique_conds
+            height_cols = self.exp_condition_cols
+        else:
+            unique_conds_and_reps = df[self.conds_and_rep_cols].drop_duplicates().reset_index(drop=True)
+            heatmap_height = len(unique_conds_and_reps)
+            height_groups = unique_conds_and_reps
+            height_cols = self.conds_and_rep_cols
+
+        # TODO: extract this code and the code in replicate_emd_heatmap and make a private helper method (since the code is similar)
+        # TODO: implement 'agg'
+        start_time = time.time()
+        matrix = pd.DataFrame(columns=range(heatmap_length), index=range(heatmap_height))
+        for idx_length, length_group in length_groups.iterrows():
+            mask_1 = (df[length_cols] == length_group).all(axis=1)
+            target_1 = df.loc[mask_1, self.target_col]
+
+            for idx_height, height_group in height_groups.iterrows():
+                mask_2 = (df[height_cols] == height_group).all(axis=1)
+                target_2 = df.loc[mask_2, self.target_col]
+
+                emd = wasserstein_distance(target_1, target_2)
+                matrix[idx_length][idx_height] = float(emd)
+                print("\rCurrent index (max is {}_{}): ".format(heatmap_length - 1, heatmap_height - 1),
+                      "{}_{}".format(idx_length, idx_height), end="", flush=True)
+        print("\rEMD matrix creation took {} seconds".format(round(time.time() - start_time, 2)))
+        matrix = matrix.astype(float)
+
+        # write out matrix
+        matrix.to_csv(os.path.join(heatmap_output_dir, "replicate_emd_matrix.csv"),
+                      index=True)
+
+        # write out key tables that map heatmap indices to conditions and replicates
+        length_groups.to_csv(os.path.join(heatmap_output_dir, "heatmap_length_group_indices.csv"),
+                             index=True, index_label="heatmap_length_index")
+        height_groups.to_csv(os.path.join(heatmap_output_dir, "heatmap_height_group_indices.csv"),
+                             index=True, index_label="heatmap_height_index")
+
+        # write out heatmap
+        heatmap = sns.heatmap(matrix, xticklabels=True, yticklabels=True, cmap="Greens_r")
+        heatmap.set_title('EMD Heatmap Between Predicted Targets and Experimental Targets')
+        heatmap.set_xticklabels(heatmap.get_xmajorticklabels(), rotation=90, fontsize=4)
+        heatmap.set_yticklabels(heatmap.get_ymajorticklabels(), rotation=0, fontsize=4)
+        plt.savefig(os.path.join(heatmap_output_dir, "predictions_per_condition_heatmap.png"), dpi=200)
+
+        # *************************************** Boxplots Creation Section ***************************************
 
 
 class HostResponseModel(CombinatorialDesignModel):
@@ -314,12 +469,14 @@ class HostResponseModel(CombinatorialDesignModel):
 
 class CircuitFluorescenceModel(CombinatorialDesignModel):
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
-                 exp_condition_cols=None, target_col="BL1-A", num_per_condition_indices=20000,
-                 **th_kwargs):
+                 exp_condition_cols=None, target_col="BL1-A", replicate_col="replicate",
+                 num_per_condition_indices=20000, **th_kwargs):
         self.per_condition_index_col = "dist_position"
         self.num_per_condition_indices = num_per_condition_indices
+        self.replicate_col = replicate_col
         super().__init__(initial_data, output_path, leaderboard_query,
                          exp_condition_cols, target_col, **th_kwargs)
+        self.conds_and_rep_cols = self.exp_condition_cols + [self.replicate_col]
 
     def add_index_per_existing_condition(self, initial_data):
         """
@@ -363,9 +520,9 @@ class CircuitFluorescenceModel(CombinatorialDesignModel):
         return future_conditions_df
 
     def align_predictions_with_new_data(self, predictions_df, new_data_df):
-        new_data_df = new_data_df[self.exp_condition_cols + [self.target_col]]
+        new_data_df = new_data_df[self.conds_and_rep_cols + [self.target_col]]
         sampled_new_df_with_dist_position = self.add_index_per_existing_condition(new_data_df)
-        col_order = self.feature_and_index_cols + [self.target_col]
+        col_order = self.feature_and_index_cols + [self.replicate_col, self.target_col]
         sampled_new_df_with_dist_position = sampled_new_df_with_dist_position[col_order]
 
         # This code block is for rounding float columns in our two DataFrames.
@@ -408,27 +565,38 @@ class CircuitFluorescenceModel(CombinatorialDesignModel):
 
         Note that this code is kind of slow, there's probably a faster way to do it using Pandas corr,
         but that requires transforming the current DataFrame into a different shape (like a pivot table).
-        :return:
-        :rtype:
+        However, the issue is that the pivot table ends up with a bunch of NaN values because not each replicate
+        has the same amount of samples. This is an issue because pandas corr does pairwise correlation and will
+        ignore all the NaN values. Maybe this can be resolved by making the sampling in the
+        add_index_per_existing_condition function to sample equally across replicates as well (not just conditions).
+        Anyways, here's some code that would be useful if that issue is ever resolved:
+        '''
+        # add sorting first if you want more ordered heatmap_index values
+        df["heatmap_index"] = df.groupby(self.conds_and_rep_cols).ngroup()
+        pivot = df.pivot(index=self.per_condition_index_col, columns="heatmap_index", values=self.target_col)
+        pivot.corr(method=wasserstein_distance)  # this will not work right now because we have NaNs in pivot.
+        # remember to generate a heatmap_index_map table for output.
+        '''
         """
         df = self.existing_data.copy()
-        conds_and_rep_cols = self.exp_condition_cols + ["replicate"]
-        unique_conds_and_reps = df[conds_and_rep_cols].drop_duplicates().reset_index(drop=True)
-        # print(df.groupby(conds_and_rep_cols, as_index=False).size(), "\n")
+        unique_conds_and_reps = df[self.conds_and_rep_cols].drop_duplicates().reset_index(drop=True)
+        # print(df.groupby(self.conds_and_rep_cols, as_index=False).size(), "\n")
+        num_unique = len(unique_conds_and_reps)
 
         start_time = time.time()
-        matrix = pd.DataFrame(columns=range(72), index=range(72))
+        matrix = pd.DataFrame(columns=range(num_unique), index=range(num_unique))
         for idx1, conds_and_rep_1 in unique_conds_and_reps.iterrows():
-            mask_1 = (df[conds_and_rep_cols] == conds_and_rep_1).all(axis=1)
+            mask_1 = (df[self.conds_and_rep_cols] == conds_and_rep_1).all(axis=1)
             target_1 = df.loc[mask_1, self.target_col]
 
             for idx2, conds_and_rep_2 in unique_conds_and_reps.iterrows():
-                mask_2 = (df[conds_and_rep_cols] == conds_and_rep_2).all(axis=1)
+                mask_2 = (df[self.conds_and_rep_cols] == conds_and_rep_2).all(axis=1)
                 target_2 = df.loc[mask_2, self.target_col]
 
                 emd = wasserstein_distance(target_1, target_2)
                 matrix[idx1][idx2] = float(emd)
-                print("\rCurrent index (max is 71_71): ", "{}_{}".format(idx1, idx2), end="", flush=True)
+                print("\rCurrent index (max is {}_{}): ".format(num_unique - 1, num_unique - 1),
+                      "{}_{}".format(idx1, idx2), end="", flush=True)
         print("\rEMD matrix creation took {} seconds".format(round(time.time() - start_time, 2)))
         matrix = matrix.astype(float)
 
