@@ -441,7 +441,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
                     reps_df.loc[len(reps_df)] = [idx, replicate, reps_mean]
 
             fig, ax = plt.subplots()
-            sns.scatterplot(x=preds_df[category_index], y=preds_df[mean_target_pred], s=10, ax=ax)
+            sns.scatterplot(x=preds_df[category_index], y=preds_df[mean_target_pred], s=50, ax=ax)
             sns.boxplot(x=reps_df[category_index], y=reps_df[mean_target_pred], ax=ax)
             ax.set(ylabel='Mean {}'.format(self.target_col))
             fig.legend()
