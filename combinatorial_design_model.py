@@ -369,81 +369,86 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         # *************************************** Heatmap Creation Section ***************************************
 
         unique_conds = df[self.exp_condition_cols].drop_duplicates().reset_index(drop=True)
-        #
-        # # set variables related to heatmap length
-        # heatmap_length = len(unique_conds)
-        # length_groups = unique_conds
-        # length_cols = self.exp_condition_cols
-        #
-        # # set variables related to heatmap height
-        # if (replicates is False) or (replicates == "agg"):
-        #     heatmap_height = len(unique_conds)
-        #     height_groups = unique_conds
-        #     height_cols = self.exp_condition_cols
-        # else:
-        #     unique_conds_and_reps = df[self.conds_and_rep_cols].drop_duplicates().reset_index(drop=True)
-        #     heatmap_height = len(unique_conds_and_reps)
-        #     height_groups = unique_conds_and_reps
-        #     height_cols = self.conds_and_rep_cols
-        #
-        # # TODO: extract this code and the code in replicate_emd_heatmap and make a private helper method (since the code is similar)
-        # # TODO: implement 'agg'
-        # start_time = time.time()
-        # matrix = pd.DataFrame(columns=range(heatmap_length), index=range(heatmap_height))
-        # for idx_length, length_group in length_groups.iterrows():
-        #     mask_1 = (df[length_cols] == length_group).all(axis=1)
-        #     target_1 = df.loc[mask_1, target_pred_col]
-        #
-        #     for idx_height, height_group in height_groups.iterrows():
-        #         mask_2 = (df[height_cols] == height_group).all(axis=1)
-        #         target_2 = df.loc[mask_2, self.target_col]
-        #
-        #         emd = wasserstein_distance(target_1, target_2)
-        #         matrix[idx_length][idx_height] = float(emd)
-        #         print("\rCurrent index (max is {}_{}): ".format(heatmap_length - 1, heatmap_height - 1),
-        #               "{}_{}".format(idx_length, idx_height), end="", flush=True)
-        # print("\rEMD matrix creation took {} seconds".format(round(time.time() - start_time, 2)))
-        # matrix = matrix.astype(float)
-        #
-        # # write out matrix
-        # matrix.to_csv(os.path.join(heatmap_output_dir, "replicate_emd_matrix.csv"),
-        #               index=True)
-        #
-        # # write out key tables that map heatmap indices to conditions and replicates
-        # length_groups.to_csv(os.path.join(heatmap_output_dir, "heatmap_length_group_indices.csv"),
-        #                      index=True, index_label="heatmap_length_index")
-        # height_groups.to_csv(os.path.join(heatmap_output_dir, "heatmap_height_group_indices.csv"),
-        #                      index=True, index_label="heatmap_height_index")
-        #
-        # # write out heatmap
-        # heatmap = sns.heatmap(matrix, xticklabels=True, yticklabels=True, cmap="Greens_r")
-        # heatmap.set_title('EMD Heatmap Between Predicted Targets and Experimental Targets')
-        # heatmap.set_xticklabels(heatmap.get_xmajorticklabels(), rotation=90, fontsize=4)
-        # heatmap.set_yticklabels(heatmap.get_ymajorticklabels(), rotation=0, fontsize=4)
-        # plt.savefig(os.path.join(heatmap_output_dir, "predictions_per_condition_heatmap.png"), dpi=200)
+
+        # set variables related to heatmap length
+        heatmap_length = len(unique_conds)
+        length_groups = unique_conds
+        length_cols = self.exp_condition_cols
+
+        # set variables related to heatmap height
+        if (replicates is False) or (replicates == "agg"):
+            heatmap_height = len(unique_conds)
+            height_groups = unique_conds
+            height_cols = self.exp_condition_cols
+        else:
+            unique_conds_and_reps = df[self.conds_and_rep_cols].drop_duplicates().reset_index(drop=True)
+            heatmap_height = len(unique_conds_and_reps)
+            height_groups = unique_conds_and_reps
+            height_cols = self.conds_and_rep_cols
+
+        # TODO: extract this code and the code in replicate_emd_heatmap and make a private helper method (since the code is similar)
+        # TODO: implement 'agg'
+        start_time = time.time()
+        matrix = pd.DataFrame(columns=range(heatmap_length), index=range(heatmap_height))
+        for idx_length, length_group in length_groups.iterrows():
+            mask_1 = (df[length_cols] == length_group).all(axis=1)
+            target_1 = df.loc[mask_1, target_pred_col]
+
+            for idx_height, height_group in height_groups.iterrows():
+                mask_2 = (df[height_cols] == height_group).all(axis=1)
+                target_2 = df.loc[mask_2, self.target_col]
+
+                emd = wasserstein_distance(target_1, target_2)
+                matrix[idx_length][idx_height] = float(emd)
+                print("\rCurrent index (max is {}_{}): ".format(heatmap_length - 1, heatmap_height - 1),
+                      "{}_{}".format(idx_length, idx_height), end="", flush=True)
+        print("\rEMD matrix creation took {} seconds".format(round(time.time() - start_time, 2)))
+        matrix = matrix.astype(float)
+
+        # write out matrix
+        matrix.to_csv(os.path.join(heatmap_output_dir, "replicate_emd_matrix.csv"),
+                      index=True)
+
+        # write out key tables that map heatmap indices to conditions and replicates
+        length_groups.to_csv(os.path.join(heatmap_output_dir, "heatmap_length_group_indices.csv"),
+                             index=True, index_label="heatmap_length_index")
+        height_groups.to_csv(os.path.join(heatmap_output_dir, "heatmap_height_group_indices.csv"),
+                             index=True, index_label="heatmap_height_index")
+
+        # write out heatmap
+        heatmap = sns.heatmap(matrix, xticklabels=True, yticklabels=True, cmap="Greens_r")
+        heatmap.set_title('EMD Heatmap Between Predicted Targets and Experimental Targets')
+        heatmap.set_xticklabels(heatmap.get_xmajorticklabels(), rotation=90, fontsize=4)
+        heatmap.set_yticklabels(heatmap.get_ymajorticklabels(), rotation=0, fontsize=4)
+        plt.savefig(os.path.join(heatmap_output_dir, "predictions_per_condition_heatmap.png"), dpi=200)
 
         # *************************************** Boxplots Creation Section ***************************************
-        print("whoo")
-
         if self.replicate_col is not None:
-            preds_df = pd.DataFrame(columns=["idx", "target_pred_mean"])
-            # reps_df = pd.DataFrame(columns=)
+            category_index = "category_index"
+            mean_target_pred = "mean_{}".format(target_pred_col)
+
+            preds_df = pd.DataFrame(columns=[category_index, mean_target_pred])
+            reps_df = pd.DataFrame(columns=[category_index, self.replicate_col, mean_target_pred])
             for idx, cond in unique_conds.iterrows():
                 mask = (df[self.exp_condition_cols] == cond).all(axis=1)
                 cond_rows = df.loc[mask]
+
                 preds_mean = cond_rows[target_pred_col].mean()
-                preds_df.append({"idx": idx, "target_pred_mean": preds_mean})
+                preds_df.loc[len(preds_df)] = [idx, preds_mean]
 
-            print(preds_df)
+                for replicate in cond_rows[self.replicate_col].unique():
+                    reps_mean = cond_rows.loc[cond_rows[self.replicate_col] == replicate, target_pred_col].mean()
+                    reps_df.loc[len(reps_df)] = [idx, replicate, reps_mean]
+
             fig, ax = plt.subplots()
-            sns.scatterplot(x=preds_df["idx"], y=preds_df["target_pred_mean"], ax=ax)
-            # sns.boxplot(x=[idx], y=)
-            plt.show()
+            sns.scatterplot(x=preds_df[category_index], y=preds_df[mean_target_pred], ax=ax)
+            sns.boxplot(x=reps_df[category_index], y=reps_df[mean_target_pred], ax=ax)
+            ax.set(ylabel='Mean {}'.format(self.target_col))
+            ax.legend()
 
-            print(cond_rows)
-            print()
-
-        sys.exit(0)
+            stats_output_dir = os.path.join(run_id_path, "statistical_comparisons", test_or_pred_data)
+            os.makedirs(stats_output_dir, exist_ok=True)
+            plt.savefig(os.path.join(stats_output_dir, "predicted_vs_experiment_target_means.png"), dpi=200)
 
 
 class HostResponseModel(CombinatorialDesignModel):
