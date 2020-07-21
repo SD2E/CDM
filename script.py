@@ -18,7 +18,7 @@ def process_file_from_data_converge(file_name, metadata_filename,
 
     meta_df = pd.read_csv(metadata_filename)
 
-    meta_df = meta_df[['sample_id', 'experiment_id'] + variable_columns]
+    meta_df = meta_df[['sample_id', 'experiment_id', 'replicate'] + variable_columns]
 
     meta_df.set_index('sample_id', drop=True, inplace=True)
 
