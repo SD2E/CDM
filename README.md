@@ -12,4 +12,6 @@ in a way where any local changes to the package will automatically be reflected 
 See [this link](https://stackoverflow.com/questions/41535915/python-pip-install-from-local-dir/41536128)
 for more details.
 
-**Note**: On Maverick2 you might not be able to install this package unless you use the `-e` option and also `--user`: e.g. `pip3 install -e cdm --user`
+**Note 1**: I get an error when trying to install in editable mode with `-e`. For now only use `pip3 install cdm`.
+
+**Note 2**: On Maverick2 you might not be able to install this package unless you use `--user`: e.g. `pip3 install -e cdm --user`
