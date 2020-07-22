@@ -13,7 +13,7 @@ setup(
     long_description=LONG_DESCRIPTION,
     author=MAINTAINER,
     author_email=MAINTAINER_EMAIL,
-    packages=['cdm'] + ['cdm/' + s for s in find_packages('cdm')],
+    packages=['cdm_src'] + ['cdm_src/' + s for s in find_packages('cdm_src')],
     include_package_data=True,
     install_requires=[
         "keras",
