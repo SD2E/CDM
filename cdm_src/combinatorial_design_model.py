@@ -1,5 +1,3 @@
-import os
-import sys
 import time
 import inspect
 import warnings
@@ -12,9 +10,9 @@ from abc import ABCMeta, abstractmethod
 from sklearn.model_selection import train_test_split, GroupShuffleSplit
 from sklearn.metrics import r2_score
 from scipy.stats import wasserstein_distance
-from names import Names as N
-from CDM_regression import CDM_regression_model
-from CDM_classification import CDM_classification_model
+from cdm_src.utils.names import Names as N
+from cdm_src.harness_models.CDM_regression import CDM_regression_model
+from cdm_src.harness_models.CDM_classification import CDM_classification_model
 from harness.test_harness_class import TestHarness
 from harness.utils.parsing_results import *
 from harness.utils.names import Names as Names_TH
