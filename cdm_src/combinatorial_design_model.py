@@ -311,7 +311,7 @@ class HostResponseModel(CombinatorialDesignModel):
     def score(self, x, y):
         return r2_score(x, y)
 
-    def embed_prior_network(self,df_network,src_node='Source',tgt_node='Target',weight='Weight',
+    def embed_prior_network(self,df_network,src_node='Source',tgt_node='Target',attrs=['Weight'],
                             emb_dim = 32):
         '''
         Provide a dataframe in the form of an edge list and embed the network
@@ -325,14 +325,15 @@ class HostResponseModel(CombinatorialDesignModel):
         from node2vec import Node2Vec
         import networkx as nx
 
-        G = nx.convert_matrix.from_pandas_edgelist(df_network, src_node, tgt_node, weight)
+
+        G = nx.convert_matrix.from_pandas_edgelist(df_network, src_node, tgt_node, attrs)
         node2vec = Node2Vec(G, dimensions=emb_dim, walk_length=30, num_walks=200, workers=4)
         print("Fitting model...")
         print()
         model = node2vec.fit(window=10, min_count=1, batch_words=4)
         df_emb = pd.DataFrame(np.asarray(model.wv.vectors), columns=['embcol_' + str(i) for i in range(emb_dim)], index=G.nodes)
         df_emb.reset_index(inplace=True)
-        df_emb.rename({df_emb.columns[0]: 'gene'}, axis=1, inplace=True)
+        df_emb.rename({df_emb.columns[0]: self.per_condition_index_col}, axis=1, inplace=True)
         #TODO needd to join to all other datasets --
         return df_emb
         
