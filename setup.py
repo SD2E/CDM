@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-DISTNAME = 'cdm'
+DISTNAME = 'combinatorial-design-modeling'
 DESCRIPTION = 'a tool for creating combinatorial design models and executing associated analyses'
 with open('README.md') as f:
     LONG_DESCRIPTION = f.read()
