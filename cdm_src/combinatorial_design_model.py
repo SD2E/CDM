@@ -311,8 +311,8 @@ class HostResponseModel(CombinatorialDesignModel):
     def score(self, x, y):
         return r2_score(x, y)
 
-    def embed_prior_network(self,df_network,src_node='Source',tgt_node='Target',attrs=['Weight'],
-                            emb_dim = 32):
+    def embed_prior_network(self, df_network, src_node='Source', tgt_node='Target', attrs=['Weight'],
+                            emb_dim=32):
         '''
         Provide a dataframe in the form of an edge list and embed the network
         :param df_network:
@@ -325,7 +325,6 @@ class HostResponseModel(CombinatorialDesignModel):
         from node2vec import Node2Vec
         import networkx as nx
 
-
         G = nx.convert_matrix.from_pandas_edgelist(df_network, src_node, tgt_node, attrs)
         node2vec = Node2Vec(G, dimensions=emb_dim, walk_length=30, num_walks=200, workers=4)
         print("Fitting model...")
@@ -334,9 +333,9 @@ class HostResponseModel(CombinatorialDesignModel):
         df_emb = pd.DataFrame(np.asarray(model.wv.vectors), columns=['embcol_' + str(i) for i in range(emb_dim)], index=G.nodes)
         df_emb.reset_index(inplace=True)
         df_emb.rename({df_emb.columns[0]: self.per_condition_index_col}, axis=1, inplace=True)
-        #TODO needd to join to all other datasets --
+        # TODO needd to join to all other datasets --
         return df_emb
-        
+
 
 class CircuitFluorescenceModel(CombinatorialDesignModel):
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
@@ -434,16 +433,27 @@ class CircuitFluorescenceModel(CombinatorialDesignModel):
 
         Note that this code is kind of slow, there's probably a faster way to do it using Pandas corr,
         but that requires transforming the current DataFrame into a different shape (like a pivot table).
-        :return:
-        :rtype:
+        However, the issue is that the pivot table ends up with a bunch of NaN values because not each replicate
+        has the same amount of samples. This is an issue because pandas corr does pairwise correlation and will
+        ignore all the NaN values. Maybe this can be resolved by making the sampling in the
+        add_index_per_existing_condition function to sample equally across replicates as well (not just conditions).
+        Anyways, here's some code that would be useful if that issue is ever resolved:
+        '''
+        # add sorting first if you want more ordered heatmap_index values
+        df["heatmap_index"] = df.groupby(conds_and_rep_cols).ngroup()
+        pivot = df.pivot(index=self.per_condition_index_col, columns="heatmap_index", values=self.target_col)
+        pivot.corr(method=wasserstein_distance)  # this will not work right now because we have NaNs in pivot.
+        # remember to generate a heatmap_index_map table for output.
+        '''
         """
         df = self.existing_data.copy()
         conds_and_rep_cols = self.exp_condition_cols + ["replicate"]
         unique_conds_and_reps = df[conds_and_rep_cols].drop_duplicates().reset_index(drop=True)
         # print(df.groupby(conds_and_rep_cols, as_index=False).size(), "\n")
+        num_unique = len(unique_conds_and_reps)
 
         start_time = time.time()
-        matrix = pd.DataFrame(columns=range(72), index=range(72))
+        matrix = pd.DataFrame(columns=range(num_unique), index=range(num_unique))
         for idx1, conds_and_rep_1 in unique_conds_and_reps.iterrows():
             mask_1 = (df[conds_and_rep_cols] == conds_and_rep_1).all(axis=1)
             target_1 = df.loc[mask_1, self.target_col]
@@ -454,7 +464,8 @@ class CircuitFluorescenceModel(CombinatorialDesignModel):
 
                 emd = wasserstein_distance(target_1, target_2)
                 matrix[idx1][idx2] = float(emd)
-                print("\rCurrent index (max is 71_71): ", "{}_{}".format(idx1, idx2), end="", flush=True)
+                print("\rCurrent index (max is {}_{}): ".format(num_unique - 1, num_unique - 1),
+                      "{}_{}".format(idx1, idx2), end="", flush=True)
         print("\rEMD matrix creation took {} seconds".format(round(time.time() - start_time, 2)))
         matrix = matrix.astype(float)
 
