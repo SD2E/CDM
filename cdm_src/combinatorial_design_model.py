@@ -46,11 +46,11 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
             self.existing_data = self.add_index_per_existing_condition(initial_data)
             self.future_data = self.generate_future_conditions_df()
         else:
-            query_matches = query_leaderboard(query=self.leaderboard_query, th_output_location=output_path)
+            query_matches = query_leaderboard(query=self.leaderboard_query, th_output_location=self.output_path)
             num_matches = len(query_matches)
             if num_matches < 1:
                 raise Exception("No leaderboard rows match the query you provided. Here's what the leaderboard looks like:\n"
-                                "{}".format(query_leaderboard(query={}, th_output_location=output_path)))
+                                "{}".format(query_leaderboard(query={}, th_output_location=self.output_path)))
             elif num_matches > 1:
                 warnings.warn("Your leaderboard query returned {} row matches. "
                               "Only the first match will be used... Here are the matching rows:".format(num_matches),
