@@ -20,9 +20,8 @@ from harness.th_model_instances.hamed_models.random_forest_regression import ran
 
 
 class CombinatorialDesignModel(metaclass=ABCMeta):
-    # TODO: let user define train_ratio (default to 0.7)
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
-                 exp_condition_cols=None, target_col="BL1-A", **th_kwargs):
+                 exp_condition_cols=None, target_col="BL1-A"):
         # if type(self) == CombinatorialDesignModel:
         #     raise Exception("CombinatorialDesignModel class may not be instantiated.\n"
         #                     "Please use HostResponseModel or CircuitFluorescenceModel instead.")
@@ -35,7 +34,6 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         self.leaderboard_query = leaderboard_query
         self.target_col = target_col
         self.th = TestHarness(output_location=self.output_path)
-        self.th_kwargs = th_kwargs
 
         if exp_condition_cols is None:
             self.exp_condition_cols = ["strain_name", "inducer_concentration_mM"]
@@ -48,11 +46,11 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
             self.existing_data = self.add_index_per_existing_condition(initial_data)
             self.future_data = self.generate_future_conditions_df()
         else:
-            query_matches = query_leaderboard(query=self.leaderboard_query, th_output_location=output_path)
+            query_matches = query_leaderboard(query=self.leaderboard_query, th_output_location=self.output_path)
             num_matches = len(query_matches)
             if num_matches < 1:
                 raise Exception("No leaderboard rows match the query you provided. Here's what the leaderboard looks like:\n"
-                                "{}".format(query_leaderboard(query={}, th_output_location=output_path)))
+                                "{}".format(query_leaderboard(query={}, th_output_location=self.output_path)))
             elif num_matches > 1:
                 warnings.warn("Your leaderboard query returned {} row matches. "
                               "Only the first match will be used... Here are the matching rows:".format(num_matches),
@@ -106,38 +104,38 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
 
         return future_conditions_df
 
-    def invoke_test_harness(self, train_df, test_df, pred_df, percent_train, num_pred_conditions):
+    def _invoke_test_harness(self, train_df, test_df, pred_df, percent_train, num_pred_conditions, **th_kwargs):
         # TODO: figure out how to raise exception or warning for th_kwargs that are passed in but haven't been listed here
-        if "function_that_returns_TH_model" in self.th_kwargs:
-            function_that_returns_TH_model = self.th_kwargs["function_that_returns_TH_model"]
+        if "function_that_returns_TH_model" in th_kwargs:
+            function_that_returns_TH_model = th_kwargs["function_that_returns_TH_model"]
         else:
             function_that_returns_TH_model = random_forest_regression
-        if "dict_of_function_parameters" in self.th_kwargs:
-            dict_of_function_parameters = self.th_kwargs["dict_of_function_parameters"]
+        if "dict_of_function_parameters" in th_kwargs:
+            dict_of_function_parameters = th_kwargs["dict_of_function_parameters"]
         else:
             dict_of_function_parameters = {}
-        if "description" in self.th_kwargs:
-            more_info = self.th_kwargs["description"]
+        if "description" in th_kwargs:
+            more_info = th_kwargs["description"]
         else:
             more_info = ""
-        if "index_cols" in self.th_kwargs:
-            index_cols = self.th_kwargs["index_cols"]
+        if "index_cols" in th_kwargs:
+            index_cols = th_kwargs["index_cols"]
         else:
             index_cols = self.feature_and_index_cols
-        if "normalize" in self.th_kwargs:
-            normalize = self.th_kwargs["normalize"]
+        if "normalize" in th_kwargs:
+            normalize = th_kwargs["normalize"]
         else:
             normalize = False
-        if "feature_cols_to_normalize" in self.th_kwargs:
-            feature_cols_to_normalize = self.th_kwargs["feature_cols_to_normalize"]
+        if "feature_cols_to_normalize" in th_kwargs:
+            feature_cols_to_normalize = th_kwargs["feature_cols_to_normalize"]
         else:
             feature_cols_to_normalize = None
-        if "feature_extraction" in self.th_kwargs:
-            feature_extraction = self.th_kwargs["feature_extraction"]
+        if "feature_extraction" in th_kwargs:
+            feature_extraction = th_kwargs["feature_extraction"]
         else:
             feature_extraction = False
-        if "sparse_cols_to_use" in self.th_kwargs:
-            sparse_cols_to_use = self.th_kwargs["sparse_cols_to_use"]
+        if "sparse_cols_to_use" in th_kwargs:
+            sparse_cols_to_use = th_kwargs["sparse_cols_to_use"]
         else:
             sparse_cols_to_use = None
         if len(pred_df) == 0:
@@ -186,10 +184,10 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         test_df = self.existing_data[self.existing_data.index.isin(test_idx)].copy()
         return train_df, test_df
 
-    def run_single(self, percent_train=70):
+    def run_single(self, percent_train=70, **th_kwargs):
         """
         Generates a train/test split of self.existing_data based on the passed-in percent_train amount,
-        and runs a single test harness model on that split by calling self.invoke_test_harness.
+        and runs a single test harness model on that split by calling self._invoke_test_harness.
         The split is stratified on self.exp_condition_cols.
         """
         train_df, test_df = self.condition_based_train_test_split(percent_train=percent_train)
@@ -197,10 +195,11 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         # test_conditions = test_df.groupby(self.exp_condition_cols).size().reset_index().rename(columns={0: 'count'})
         # print("train_conditions:\n{}\n".format(train_conditions))
         # print("test_conditions:\n{}\n".format(test_conditions))
-        self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_data,
-                                 percent_train=percent_train, num_pred_conditions=len(self.future_data))
+        self._invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_data,
+                                  percent_train=percent_train, num_pred_conditions=len(self.future_data),
+                                  **th_kwargs)
 
-    def run_progressive_sampling(self, num_runs=1, start_percent=25, end_percent=100, step_size=5):
+    def run_progressive_sampling(self, num_runs=1, start_percent=25, end_percent=100, step_size=5, **th_kwargs):
         percent_list = list(range(start_percent, end_percent, step_size))
         if end_percent not in percent_list:
             percent_list.append(end_percent)
@@ -210,8 +209,9 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
             for percent_train in percent_list:
                 train_df, test_df = self.condition_based_train_test_split(percent_train=percent_train)
                 # invoke the Test Harness with the splits we created:
-                self.invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_data,
-                                         percent_train=percent_train, num_pred_conditions=len(self.future_data))
+                self._invoke_test_harness(train_df=train_df, test_df=test_df, pred_df=self.future_data,
+                                          percent_train=percent_train, num_pred_conditions=len(self.future_data),
+                                          **th_kwargs)
             # TODO: characterizaton has yet to include calculation of knee point
 
     @abstractmethod
@@ -268,10 +268,10 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
 
 class HostResponseModel(CombinatorialDesignModel):
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
-                 exp_condition_cols=None, target_col="logFC", gene_col="gene", **th_kwargs):
+                 exp_condition_cols=None, target_col="logFC", gene_col="gene"):
         self.per_condition_index_col = gene_col
         super().__init__(initial_data, output_path, leaderboard_query,
-                         exp_condition_cols, target_col, **th_kwargs)
+                         exp_condition_cols, target_col)
 
     def add_index_per_existing_condition(self, initial_data):
         """
@@ -339,12 +339,11 @@ class HostResponseModel(CombinatorialDesignModel):
 
 class CircuitFluorescenceModel(CombinatorialDesignModel):
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
-                 exp_condition_cols=None, target_col="BL1-A", num_per_condition_indices=20000,
-                 **th_kwargs):
+                 exp_condition_cols=None, target_col="BL1-A", num_per_condition_indices=20000):
         self.per_condition_index_col = "dist_position"
         self.num_per_condition_indices = num_per_condition_indices
         super().__init__(initial_data, output_path, leaderboard_query,
-                         exp_condition_cols, target_col, **th_kwargs)
+                         exp_condition_cols, target_col)
 
     def add_index_per_existing_condition(self, initial_data):
         """
