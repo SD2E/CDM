@@ -68,11 +68,16 @@ class HostResponseModel(CombinatorialDesignModel):
 
         G = nx.convert_matrix.from_pandas_edgelist(df_network, src_node, tgt_node, attrs)
         node2vec = Node2Vec(G, dimensions=emb_dim, walk_length=30, num_walks=200, workers=4)
+        # node2vec = Node2Vec(G, dimensions=emb_dim, walk_length=5, num_walks=10, workers=4) #For debugging purposes
         print("Fitting model...")
         print()
         model = node2vec.fit(window=10, min_count=1, batch_words=4)
+        # model = node2vec.fit(window=2, min_count=1, batch_words=2) #For debugging purposes
         df_emb = pd.DataFrame(np.asarray(model.wv.vectors), columns=['embcol_' + str(i) for i in range(emb_dim)], index=G.nodes)
         df_emb.reset_index(inplace=True)
         df_emb.rename({df_emb.columns[0]: self.per_condition_index_col}, axis=1, inplace=True)
-        # TODO needd to join to all other datasets --
-        return df_emb
+        df_emb['emb_present']=1
+        self.existing_data = pd.merge(self.existing_data,df_emb,how='left',on=self.per_condition_index_col)
+        self.existing_data['emb_present'].fillna(0,inplace=True)
+        self.future_data = pd.merge(self.future_data,df_emb,how='left',on=self.per_condition_index_col)
+        self.future_data['emb_present'].fillna(0, inplace=True)
