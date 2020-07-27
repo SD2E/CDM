@@ -44,7 +44,7 @@ def load_CFM_demo_data(percent: Union[int, float] = 10) -> pd.DataFrame:
     cfm_demo_data.reset_index(drop=True, inplace=True)
 
     # print("\nCFM demo data looks like:")
-    # print(cfm_demo_data)
+    # print(cfm_demo_data, "\n")
 
     return cfm_demo_data
 
@@ -70,8 +70,7 @@ def load_HRM_demo_data(percent: Union[int, float] = 10) -> pd.DataFrame:
                                 usecols=relevant_cols)[relevant_cols]
     hrm_demo_data.rename(columns={"Unnamed: 0": "gene"}, inplace=True)
 
-    print("\nHRM data looks like:\n")
-    print(hrm_demo_data)
-    print()
+    # print("\nHRM data looks like:\n")
+    # print(hrm_demo_data, "\n")
 
     return hrm_demo_data
