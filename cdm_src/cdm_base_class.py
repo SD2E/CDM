@@ -38,6 +38,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
             self.exp_condition_cols = exp_condition_cols
         self.feature_and_index_cols = self.exp_condition_cols + [self.per_condition_index_col]
 
+        self.initial_data = initial_data  # allows users to see what was passed in before any changes were made
         if self.leaderboard_query is None:
             # set existing_data and generate future_data
             self.existing_data = self.add_index_per_existing_condition(initial_data)
