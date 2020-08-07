@@ -37,7 +37,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         else:
             self.exp_condition_cols = exp_condition_cols
         self.feature_and_index_cols = self.exp_condition_cols + [self.per_condition_index_col]
-
+        self.feature_and_index_cols_copy = self.feature_and_index_cols.copy() #Make a copy because some methods may change it.
         self.initial_data = initial_data  # allows users to see what was passed in before any changes were made
         if self.leaderboard_query is None:
             # set existing_data and generate future_data
@@ -124,6 +124,11 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
             normalize = th_kwargs["normalize"]
         else:
             normalize = False
+        if "feature_cols_to_use" in th_kwargs:
+            raise warnings.warn("You are overwriting the features to use, this may impact downstream integration with predictions....")
+            feature_cols_to_use = th_kwargs['feature_and_index_cols']
+        else:
+            feature_cols_to_use = self.feature_and_index_cols
         if "feature_cols_to_normalize" in th_kwargs:
             feature_cols_to_normalize = th_kwargs["feature_cols_to_normalize"]
         else:
@@ -147,7 +152,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
                                        "more_info: {}".format(inspect.stack()[1][3], percent_train,
                                                               num_pred_conditions, more_info),
                            target_cols=self.target_col,
-                           feature_cols_to_use=self.feature_and_index_cols,
+                           feature_cols_to_use=feature_cols_to_use,
                            index_cols=index_cols,
                            normalize=normalize,
                            feature_cols_to_normalize=feature_cols_to_normalize,
@@ -262,3 +267,10 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
 
         score = self.score(x=combined_df[self.target_col], y=combined_df[target_pred_col])
         return score
+
+    def reset_feature_and_index_cols(self):
+        '''
+        Reset columns back to original set if it is ever changed
+        :return:
+        '''
+        self.feature_and_index_cols = self.feature_and_index_cols_copy.copy()
