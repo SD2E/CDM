@@ -30,18 +30,21 @@ class CDM_Classification(ClassificationModel):
         K.clear_session()
         return probs.max(axis=1)
 
-def CDM_classification_model(input_size, output_size, batch_size=10000,epochs=25,learning_rate=1e-3):
 
-    inputs = Input(shape=(input_size,))
+def CDM_classification_model(output_size, input_shape=None, batch_size=10000, epochs=25, learning_rate=1e-3):
+    inputs = Input(shape=(input_shape,))
 
-    x = Dense(input_size, activation='relu')(inputs)
-    x = Dense(input_size*6, activation='relu')(x)
-    x = Dense(input_size*3, activation='relu')(x)
+    x = Dense(input_shape, activation='relu')(inputs)
+    x = Dense(input_shape * 6, activation='relu')(x)
+    x = Dense(input_shape * 3, activation='relu')(x)
     x = Dense(output_size, activation='softmax')(x)
 
     model = Model(inputs, outputs=x)
     model.compile(loss='mean_absolute_error', optimizer=Adam(lr=learning_rate))
 
-    th_model = CDM_Classification(model=model, model_author="Jordan", model_description="batch_size={0}, epochs={1}, learning_rate={2}".format(batch_size, epochs, learning_rate),epochs=epochs, batch_size=batch_size)
+    th_model = CDM_Classification(model=model, model_author="Jordan",
+                                  model_description="batch_size={0}, epochs={1}, learning_rate={2}".format(batch_size, epochs,
+                                                                                                           learning_rate),
+                                  epochs=epochs, batch_size=batch_size)
 
     return th_model
