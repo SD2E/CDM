@@ -37,7 +37,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         else:
             self.exp_condition_cols = exp_condition_cols
         self.feature_and_index_cols = self.exp_condition_cols + [self.per_condition_index_col]
-        self.feature_and_index_cols_copy = self.feature_and_index_cols.copy() #Make a copy because some methods may change it.
+        self.feature_and_index_cols_copy = self.feature_and_index_cols.copy()  # Make a copy because some methods may change it.
         self.initial_data = initial_data  # allows users to see what was passed in before any changes were made
         if self.leaderboard_query is None:
             # set existing_data and generate future_data
@@ -125,8 +125,8 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         else:
             normalize = False
         if "feature_cols_to_use" in th_kwargs:
-            raise warnings.warn("You are overwriting the features to use, this may impact downstream integration with predictions....")
-            feature_cols_to_use = th_kwargs['feature_and_index_cols']
+            warnings.warn("You are overwriting the features to use, this may impact downstream integration with predictions....")
+            feature_cols_to_use = th_kwargs['feature_cols_to_use']
         else:
             feature_cols_to_use = self.feature_and_index_cols
         if "feature_cols_to_normalize" in th_kwargs:
