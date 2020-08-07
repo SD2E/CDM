@@ -81,3 +81,7 @@ class HostResponseModel(CombinatorialDesignModel):
         self.existing_data['emb_present'].fillna(0, inplace=True)
         self.future_data = pd.merge(self.future_data, df_emb, how='left', on=self.per_condition_index_col)
         self.future_data['emb_present'].fillna(0, inplace=True)
+        self.feature_and_index_cols = self.feature_and_index_cols + ['embcol_' + str(i) for i in range(emb_dim)]
+        print('Embedding added to dataframe')
+        print()
+
