@@ -53,13 +53,16 @@ class HostResponseModel(CombinatorialDesignModel):
         return r2_score(x, y)
 
     def embed_prior_network(self, df_network, src_node='Source', tgt_node='Target', attrs=['Weight'],
-                            emb_dim=32, workers=4):
+                            emb_dim=32, workers=4, debug=False):
         '''
         Provide a dataframe in the form of an edge list and embed the network
-        :param df_network:
-        :param src_node:
-        :param tgt_node:
-        :param weight:
+        :param df_network: pd.Dataframe, dataframe of network
+        :param src_node: str, source column name in dataframe
+        :param tgt_node: str, target column name in dataframe
+        :param weight: list of attributes to attach to edges
+        :param emb_dim: int, embedding dimension
+        :param workers: number of workers to use (TACC/MAC can go up to 16)
+        :param debug: boolean, set to True if you want to run in Debug mode
         :return:
         '''
 
@@ -67,12 +70,19 @@ class HostResponseModel(CombinatorialDesignModel):
         import networkx as nx
 
         G = nx.convert_matrix.from_pandas_edgelist(df_network, src_node, tgt_node, attrs)
-        node2vec = Node2Vec(G, dimensions=emb_dim, walk_length=30, num_walks=200, workers=workers)
-        # node2vec = Node2Vec(G, dimensions=emb_dim, walk_length=5, num_walks=10, workers=workers)  # For debugging purposes
-        print("Fitting model...")
-        print()
-        model = node2vec.fit(window=10, min_count=1, batch_words=4)
-        # model = node2vec.fit(window=2, min_count=1, batch_words=2)  # For debugging purposes
+        if not debug:
+            print("Building model...")
+            node2vec = Node2Vec(G, dimensions=emb_dim, walk_length=30, num_walks=200, workers=workers)
+            print()
+            print("Fitting model...")
+            model = node2vec.fit(window=10, min_count=1, batch_words=4)
+        else:
+            print("-"*20,'Entering DEBUG Mode','-'*20)
+            print("Building model...")
+            node2vec = Node2Vec(G, dimensions=emb_dim, walk_length=5, num_walks=10, workers=workers)  # For debugging purposes
+            print("Fitting model...")
+            model = node2vec.fit(window=2, min_count=1, batch_words=2)  # For debugging purposes
+
         df_emb = pd.DataFrame(np.asarray(model.wv.vectors), columns=['embcol_' + str(i) for i in range(emb_dim)], index=G.nodes)
         df_emb.reset_index(inplace=True)
         df_emb.rename({df_emb.columns[0]: self.per_condition_index_col}, axis=1, inplace=True)
