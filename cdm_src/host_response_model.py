@@ -1,3 +1,5 @@
+import time
+import warnings
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -11,6 +13,7 @@ class HostResponseModel(CombinatorialDesignModel):
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
                  exp_condition_cols=None, target_col="logFC", gene_col="gene"):
         self.per_condition_index_col = gene_col
+        self.gene_network_df = None
         super().__init__(initial_data, output_path, leaderboard_query,
                          exp_condition_cols, target_col)
 
@@ -77,7 +80,7 @@ class HostResponseModel(CombinatorialDesignModel):
             print("Fitting model...")
             model = node2vec.fit(window=10, min_count=1, batch_words=4)
         else:
-            print("-"*20,'Entering DEBUG Mode','-'*20)
+            print("-" * 20, 'Entering DEBUG Mode', '-' * 20)
             print("Building model...")
             node2vec = Node2Vec(G, dimensions=emb_dim, walk_length=5, num_walks=10, workers=workers)  # For debugging purposes
             print("Fitting model...")
@@ -95,3 +98,33 @@ class HostResponseModel(CombinatorialDesignModel):
         print('Embedding added to dataframe')
         print()
 
+    def generate_gene_network_df(self, network_df, num_random_subset=5):
+        unique_genes = np.unique(self.existing_data[self.per_condition_index_col])
+        if num_random_subset >= len(unique_genes):
+            warnings.warn("The value you chose for num_random_subset is greater than or equal to the number of unique genes.\n"
+                          "All unique genes will be used instead of a random subset.")
+            random_subset_of_genes = unique_genes.copy()
+        else:
+            random_subset_of_genes = list(np.random.choice(unique_genes, size=num_random_subset, replace=False))
+
+        start_time = time.time()
+        final_df = pd.concat([self.existing_data.assign(gene_2=g) for g in random_subset_of_genes], ignore_index=True)
+        print("\nloop 1 took {} seconds.".format(round(time.time() - start_time, 2)))
+
+        network_df = network_df[["Source", "Target"]]
+        edges = list(zip(network_df["Source"], network_df["Target"])) + list(zip(network_df["Target"], network_df["Source"]))
+
+        final_df["gene_pair"] = list(zip(final_df["gene"], final_df["gene_2"]))
+        final_df["edge_present"] = 0
+
+        start_time = time.time()
+        final_df.loc[final_df["gene_pair"].isin(edges), "edge_present"] = 1
+        print("loop 2 took {} seconds.\n".format(round(time.time() - start_time, 2)))
+        final_df.drop(columns=["gene_pair"], inplace=True)
+        final_df["(logFC, edge_present)"] = list(zip(final_df["logFC"], final_df["edge_present"]))
+
+        col_order_beginning = ["gene", "FDR", "nlogFDR", "logFC", "gene_2", "edge_present", "(logFC, edge_present)"]
+        col_order = col_order_beginning + [c for c in list(final_df.columns) if c not in col_order_beginning]
+        final_df = final_df[col_order]
+
+        self.gene_network_df = final_df.copy()
