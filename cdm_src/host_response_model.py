@@ -98,14 +98,25 @@ class HostResponseModel(CombinatorialDesignModel):
         print('Embedding added to dataframe')
         print()
 
-    def generate_gene_network_df(self, network_df, num_random_subset=5):
+    def generate_gene_network_df(self, network_df: pd.DataFrame, num_gene_2: int = 5, edge_exists_ratio: float = 1.0):
+        """
+        Generates a DataFrame with all genes in one column, and a subsample of those genes (determined by num_gene_2) in
+        the gene_2 column. The edge_present column indicates if there was an edge in the network_df between gene and gene_2.
+        :param network_df: DataFrame containing the edge network information.
+        :param num_gene_2: The number of genes to randomly subsample from the gene column and use in the gene_2 column.
+        :param edge_exists_ratio: For each experimental condition, the ratio you want between rows with edge_present = 0 and
+                                  rows with edge_present = 1. Since the number of rows with edge_present = 0 is much greater
+                                  than the number of rows with edge_present = 1, The code will randomly down-sample the rows
+                                  with edge_present = 0 in order to meet the desired ratio. Note that the ratio can be
+                                  greater than 1.0 too.
+        """
         unique_genes = np.unique(self.existing_data[self.per_condition_index_col])
-        if num_random_subset >= len(unique_genes):
-            warnings.warn("The value you chose for num_random_subset is greater than or equal to the number of unique genes.\n"
+        if num_gene_2 >= len(unique_genes):
+            warnings.warn("The value you chose for num_gene_2 is greater than or equal to the number of unique genes.\n"
                           "All unique genes will be used instead of a random subset.")
             random_subset_of_genes = unique_genes.copy()
         else:
-            random_subset_of_genes = list(np.random.choice(unique_genes, size=num_random_subset, replace=False))
+            random_subset_of_genes = list(np.random.choice(unique_genes, size=num_gene_2, replace=False))
 
         start_time = time.time()
         final_df = pd.concat([self.existing_data.assign(gene_2=g) for g in random_subset_of_genes], ignore_index=True)
@@ -126,5 +137,15 @@ class HostResponseModel(CombinatorialDesignModel):
         col_order_beginning = ["gene", "FDR", "nlogFDR", "logFC", "gene_2", "edge_present", "(logFC, edge_present)"]
         col_order = col_order_beginning + [c for c in list(final_df.columns) if c not in col_order_beginning]
         final_df = final_df[col_order]
+
+        # apply edge_exists_ratio here for each experimental condition
+        g = final_df.groupby(self.exp_condition_cols)
+        ones = final_df.loc[final_df["edge_present"] == 1].reset_index(drop=True)
+        zeros = g.apply(lambda x: x.loc[x["edge_present"] == 0].sample(
+            (int(edge_exists_ratio * x["edge_present"].value_counts().values[-1])))).reset_index(drop=True)
+        final_df = pd.concat([ones, zeros])
+        # uncomment these prints to validate that you're getting what you expect
+        # print(final_df["edge_present"].value_counts(), "\n")
+        # print(final_df.groupby(self.exp_condition_cols).count(), "\n")
 
         self.gene_network_df = final_df.copy()
