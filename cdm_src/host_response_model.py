@@ -98,17 +98,21 @@ class HostResponseModel(CombinatorialDesignModel):
         print('Embedding added to dataframe')
         print()
 
-    def generate_gene_network_df(self, network_df: pd.DataFrame, num_gene_2: int = 5, edge_exists_ratio: float = 1.0):
+    def generate_gene_network_df(self, network_df: pd.DataFrame, num_gene_2: int = 5,
+                                 edge_exists_ratio: float = 1.0, min_rows_with_no_edge=5):
         """
         Generates a DataFrame with all genes in one column, and a subsample of those genes (determined by num_gene_2) in
         the gene_2 column. The edge_present column indicates if there was an edge in the network_df between gene and gene_2.
         :param network_df: DataFrame containing the edge network information.
         :param num_gene_2: The number of genes to randomly subsample from the gene column and use in the gene_2 column.
-        :param edge_exists_ratio: For each experimental condition, the ratio you want between rows with edge_present = 0 and
-                                  rows with edge_present = 1. Since the number of rows with edge_present = 0 is much greater
+        :param edge_exists_ratio: For each experimental condition and gene, the ratio you want between rows with edge_present = 0
+                                  and rows with edge_present = 1. Since the number of rows with edge_present = 0 is much greater
                                   than the number of rows with edge_present = 1, The code will randomly down-sample the rows
-                                  with edge_present = 0 in order to meet the desired ratio. Note that the ratio can be
-                                  greater than 1.0 too.
+                                  with edge_present = 0 in order to meet the desired ratio (also see min_rows_with_no_edge).
+                                  Note that the ratio can be greater than 1.0 too.
+        :param min_rows_with_no_edge: For each experimental condition and gene, this is the minimum number of rows that will be
+                                      sampled from rows with edge_present = 5. Only kicks in if the amount derived from
+                                      edge_exists_ratio is less than min_rows_with_no_edge.
         """
         unique_genes = np.unique(self.existing_data[self.per_condition_index_col])
         if num_gene_2 >= len(unique_genes):
@@ -130,7 +134,7 @@ class HostResponseModel(CombinatorialDesignModel):
 
         start_time = time.time()
         final_df.loc[final_df["gene_pair"].isin(edges), "edge_present"] = 1
-        print("loop 2 took {} seconds.\n".format(round(time.time() - start_time, 2)))
+        print("loop 2 took {} seconds.".format(round(time.time() - start_time, 2)))
         final_df.drop(columns=["gene_pair"], inplace=True)
         final_df["(logFC, edge_present)"] = list(zip(final_df["logFC"], final_df["edge_present"]))
 
@@ -139,13 +143,25 @@ class HostResponseModel(CombinatorialDesignModel):
         final_df = final_df[col_order]
 
         # apply edge_exists_ratio here for each experimental condition
-        g = final_df.groupby(self.exp_condition_cols)
         ones = final_df.loc[final_df["edge_present"] == 1].reset_index(drop=True)
-        zeros = g.apply(lambda x: x.loc[x["edge_present"] == 0].sample(
-            (int(edge_exists_ratio * x["edge_present"].value_counts().values[-1])))).reset_index(drop=True)
+
+        start_time = time.time()
+        g = final_df.groupby(self.exp_condition_cols + [self.per_condition_index_col])
+
+        def apply_me(x):
+            num_present_edges = sum(x["edge_present"])
+            num_samples = max(int(edge_exists_ratio * num_present_edges), min_rows_with_no_edge)
+            # print(int(edge_exists_ratio * num_present_edges), min_rows_with_no_edge, num_samples)
+            x_new = x.loc[x["edge_present"] == 0].sample(num_samples)
+            return x_new
+
+        zeros = g.apply(apply_me).reset_index(drop=True)
+        print("loop 3 took {} seconds.\n".format(round(time.time() - start_time, 2)))
+
         final_df = pd.concat([ones, zeros])
         # uncomment these prints to validate that you're getting what you expect
         # print(final_df["edge_present"].value_counts(), "\n")
         # print(final_df.groupby(self.exp_condition_cols).count(), "\n")
+        # print(final_df.groupby(self.exp_condition_cols + [self.per_condition_index_col]).count(), "\n")
 
         self.gene_network_df = final_df.copy()
