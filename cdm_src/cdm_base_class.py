@@ -218,7 +218,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
             # TODO: characterizaton has yet to include calculation of knee point
 
     @abstractmethod
-    def align_predictions_with_new_data(self, predictions_df, new_data_df):
+    def _align_predictions_with_new_data(self, predictions_df, new_data_df):
         """
         This method should align and merge the DataFrame of previous predictions with the DataFrame of new experimental data.
         This method should be implemented in the HRM and CFM subclasses.
@@ -259,13 +259,13 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
 
         df_preds = pd.read_csv(preds_path)
         target_pred_col = "{}_predictions".format(self.target_col)
-        df_preds = df_preds[self.feature_and_index_cols + [target_pred_col]]
-        combined_df = self.align_predictions_with_new_data(predictions_df=df_preds, new_data_df=new_data_df)
+        self.df_preds = df_preds[self.feature_and_index_cols + [target_pred_col]]
+        self.combined_df = self._align_predictions_with_new_data(predictions_df=self.df_preds, new_data_df=new_data_df)
 
-        ranked_results = self.rank_results(results_df=combined_df, control_col=self.target_col,
+        ranked_results = self.rank_results(results_df=self.combined_df, control_col=self.target_col,
                                            prediction_col=target_pred_col, rank_name="ratio_based_ranking")
 
-        score = self.score(x=combined_df[self.target_col], y=combined_df[target_pred_col])
+        score = self.score(x=self.combined_df[self.target_col], y=self.combined_df[target_pred_col])
         return score
 
     def reset_feature_and_index_cols(self):
