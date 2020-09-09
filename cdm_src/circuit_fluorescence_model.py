@@ -61,7 +61,10 @@ class CircuitFluorescenceModel(CombinatorialDesignModel):
         return future_conditions_df
 
     def _align_predictions_with_new_data(self, predictions_df, new_data_df):
-        new_data_df = new_data_df[self.exp_condition_cols + [self.target_col]]
+        new_data_cols = list(new_data_df.columns.values)
+        first_cols = self.exp_condition_cols + [self.target_col]
+        last_cols = list(set(new_data_cols).difference(set(first_cols)))
+        new_data_df = new_data_df[first_cols + last_cols]
         sampled_new_df_with_dist_position = self.add_index_per_existing_condition(new_data_df)
         col_order = self.feature_and_index_cols + [self.target_col]
         sampled_new_df_with_dist_position = sampled_new_df_with_dist_position[col_order]

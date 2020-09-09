@@ -40,7 +40,10 @@ class HostResponseModel(CombinatorialDesignModel):
         return future_conditions_df
 
     def _align_predictions_with_new_data(self, predictions_df, new_data_df):
-        new_data_df = new_data_df[self.feature_and_index_cols + [self.target_col]]
+        new_data_cols = list(new_data_df.columns.values)
+        first_cols = self.feature_and_index_cols + [self.target_col]
+        last_cols = list(set(new_data_cols).difference(set(first_cols)))
+        new_data_df = new_data_df[first_cols + last_cols]
         merged_df = pd.merge(new_data_df, predictions_df, how="inner",
                              on=self.feature_and_index_cols)
         len_preds = len(predictions_df)
