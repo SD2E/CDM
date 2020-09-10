@@ -4,6 +4,7 @@ import itertools
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from typing import Tuple
 import matplotlib.pyplot as plt
 from abc import ABCMeta, abstractmethod
 from sklearn.model_selection import GroupShuffleSplit
@@ -14,6 +15,14 @@ from harness.test_harness_class import TestHarness
 from harness.utils.parsing_results import *
 from harness.utils.names import Names as Names_TH
 from harness.th_model_instances.hamed_models.random_forest_regression import random_forest_regression
+
+
+def custom_formatwarning(message, category, filename, lineno, line=''):
+    # ignore everything except the message
+    return str(filename) + ":" + str(lineno) + ":\n" + str(message) + '\n'
+
+
+warnings.formatwarning = custom_formatwarning
 
 
 class CombinatorialDesignModel(metaclass=ABCMeta):
@@ -44,6 +53,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
             self.existing_data = self.add_index_per_existing_condition(initial_data)
             self.future_data = self.generate_future_conditions_df()
         else:
+            self.existing_data = None
             query_matches = query_leaderboard(query=self.leaderboard_query, th_output_location=self.output_path)
             num_matches = len(query_matches)
             if num_matches < 1:
@@ -60,8 +70,6 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
             self.run_id = run_ids[0]
             print("The run_id for the Test Harness run being read-in is: {}".format(self.run_id))
             assert isinstance(self.run_id, str), "self.run_id should be a string. Got this instead: {}".format(self.run_id)
-            # Put in code to get the path of the model and read it in once Hamed works that in
-            # self.model = ""
 
     @abstractmethod
     def add_index_per_existing_condition(self, initial_data):
@@ -236,6 +244,35 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         results_df.sort_values(by=rank_name, inplace=True)
         return results_df
 
+    def _investigate_condition_overlap(self, df1: pd.DataFrame, df2: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        df1_conds = df1[self.exp_condition_cols].drop_duplicates()
+        df2_conds = df2[self.exp_condition_cols].drop_duplicates()
+        temp_merge = df1_conds.merge(df2_conds, how="outer", indicator="which")
+        df1_only_conds = temp_merge.loc[temp_merge["which"] == "left_only"]
+        df2_only_conds = temp_merge.loc[temp_merge["which"] == "right_only"]
+        return df1_only_conds, df2_only_conds
+
+    def _investigate_genes_per_condition_overlap(self, df1: pd.DataFrame, df2: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        df1 = df1[self.feature_and_index_cols]
+        df2 = df2[self.feature_and_index_cols]
+        df1_conds = df1[self.exp_condition_cols].drop_duplicates()
+        df2_conds = df2[self.exp_condition_cols].drop_duplicates()
+        joint_conds_only = df1_conds.merge(df2_conds, on=self.exp_condition_cols, how="inner")
+
+        keys = list(joint_conds_only.columns.values)
+        idx1 = df1.set_index(keys).index
+        idx2 = df2.set_index(keys).index
+        idxj = joint_conds_only.set_index(keys).index
+
+        df1_genes_per_mutual_condition = df1[idx1.isin(idxj)]
+        df2_genes_per_mutual_condition = df2[idx2.isin(idxj)]
+
+        temp_merge = df1_genes_per_mutual_condition.merge(df2_genes_per_mutual_condition, how="outer", indicator="which")
+        only_df1_genes_per_mutual_condition = temp_merge.loc[temp_merge["which"] == "left_only"]
+        only_df2_genes_per_mutual_condition = temp_merge.loc[temp_merge["which"] == "right_only"]
+
+        return only_df1_genes_per_mutual_condition, only_df2_genes_per_mutual_condition
+
     def evaluate_predictions(self, new_data_df):
         '''
         Take in a dataframe that was produced by the experiment and compare it with the predicted dataframe
@@ -262,8 +299,24 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         self.df_preds = df_preds[self.feature_and_index_cols + [target_pred_col]]
         self.combined_df = self._align_predictions_with_new_data(predictions_df=self.df_preds, new_data_df=new_data_df)
 
-        ranked_results = self.rank_results(results_df=self.combined_df, control_col=self.target_col,
-                                           prediction_col=target_pred_col, rank_name="ratio_based_ranking")
+        pred_only_conds, new_data_only_conds = self._investigate_condition_overlap(df1=self.df_preds, df2=new_data_df)
+        if len(pred_only_conds) != 0:
+            warnings.warn("The following conditions exist only in the predicted data "
+                          "and do not exist in the new experimental data:\n\n{}\n\n".format(pred_only_conds))
+        if len(new_data_only_conds) != 0:
+            warnings.warn("The following conditions exist only in the new experimental data "
+                          "and do not exist in the predicted data:\n\n{}\n\n".format(new_data_only_conds))
+
+        pred_only_genes, new_data_only_genes = self._investigate_genes_per_condition_overlap(df1=self.df_preds, df2=new_data_df)
+        if len(pred_only_genes) != 0:
+            warnings.warn("Within mutual conditions, the following genes exist only in the predicted data "
+                          "and do not exist in the new experimental data:\n\n{}\n\n".format(pred_only_genes))
+        if len(new_data_only_genes) != 0:
+            warnings.warn("Within mutual conditions, the following genes exist only in the new experimental data "
+                          "and do not exist in the predicted data:\n\n{}\n\n".format(new_data_only_genes))
+
+        # ranked_results = self.rank_results(results_df=self.combined_df, control_col=self.target_col,
+        #                                    prediction_col=target_pred_col, rank_name="ratio_based_ranking")
 
         score = self.score(x=self.combined_df[self.target_col], y=self.combined_df[target_pred_col])
         return score
