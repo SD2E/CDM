@@ -1,21 +1,45 @@
 import time
 import warnings
+import operator
 import numpy as np
 import pandas as pd
-import seaborn as sns
+from typing import Dict, Tuple, Callable
 import matplotlib.pyplot as plt
 from sklearn.metrics import r2_score
 from harness.utils.parsing_results import *
+from cdm_src.utils.names import Names as N
 from cdm_src.cdm_base_class import CombinatorialDesignModel
 
 
 class HostResponseModel(CombinatorialDesignModel):
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
-                 exp_condition_cols=None, target_col="logFC", gene_col="gene"):
+                 exp_condition_cols=None, target_col="logFC", gene_col="gene",
+                 impact_thresholds: Dict[str, Tuple[Callable, float]] = None):
+        """
+
+        :param initial_data:
+        :param output_path:
+        :param leaderboard_query:
+        :param exp_condition_cols:
+        :param target_col:
+        :param gene_col:
+        :param impact_thresholds: Dictionary with string keys (column names) and tuple values that defines thresholds per column.
+                                    The tuples should be (operator function, float)
+                                    None defaults to {"nlogFDR": (operator.lt, 0.05), "logFC": (operator.gt, 1.1)}
+                                    Set equal to False if you don't want an impact threshold column.
+        """
         self.per_condition_index_col = gene_col
         self.gene_network_df = None
         super().__init__(initial_data, output_path, leaderboard_query,
                          exp_condition_cols, target_col)
+
+        if impact_thresholds is None:
+            self.impact_thresholds = {"nlogFDR": (operator.lt, 0.05), "logFC": (operator.gt, 1.1)}
+        else:
+            self.impact_thresholds = impact_thresholds
+        if self.impact_thresholds is not False:
+            self.existing_data = self._create_impact_column(self.existing_data)
+        print(self.existing_data)
 
     def add_index_per_existing_condition(self, initial_data):
         """
@@ -38,6 +62,12 @@ class HostResponseModel(CombinatorialDesignModel):
         future_conditions_df[self.per_condition_index_col] = [unique_genes for i in range(len(future_conditions_df))]
         future_conditions_df = future_conditions_df.explode(self.per_condition_index_col).reset_index(drop=True)
         return future_conditions_df
+
+    def _create_impact_column(self, df):
+        impacted = pd.concat([y[0](df[x], y[1]) for x, y in self.impact_thresholds.items()],
+                             axis=1).all(axis=1)
+        df[N.impact_col] = impacted
+        return df
 
     def _align_predictions_with_new_data(self, predictions_df, new_data_df):
         new_data_cols = list(new_data_df.columns.values)
