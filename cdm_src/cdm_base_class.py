@@ -4,7 +4,7 @@ import itertools
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from typing import Tuple
+from typing import Tuple, Union, Optional
 import matplotlib.pyplot as plt
 from abc import ABCMeta, abstractmethod
 from sklearn.model_selection import GroupShuffleSplit
@@ -16,10 +16,13 @@ from harness.utils.parsing_results import *
 from harness.utils.names import Names as Names_TH
 from harness.th_model_instances.hamed_models.random_forest_regression import random_forest_regression
 
+# gets rid of the annoying SettingWithCopyWarnings
+# set this equal to "raise" if you feel like debugging SettingWithCopyWarnings.
+pd.options.mode.chained_assignment = None  # default="warn"
+
 
 def custom_formatwarning(message, category, filename, lineno, line=''):
-    # ignore everything except the message
-    return str(filename) + ":" + str(lineno) + ":\n" + str(message) + '\n'
+    return "\n" + str(filename) + ":" + str(lineno) + ":\n" + str(message) + '\n'
 
 
 warnings.formatwarning = custom_formatwarning
@@ -61,8 +64,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
                                 "{}".format(query_leaderboard(query={}, th_output_location=self.output_path)))
             elif num_matches > 1:
                 warnings.warn("Your leaderboard query returned {} row matches. "
-                              "Only the first match will be used... Here are the matching rows:".format(num_matches),
-                              stacklevel=100000)
+                              "Only the first match will be used... Here are the matching rows:".format(num_matches))
             else:
                 print("Your leaderboard query matched the following row:")
             print(query_matches, "\n")
@@ -244,34 +246,65 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         results_df.sort_values(by=rank_name, inplace=True)
         return results_df
 
-    def _investigate_condition_overlap(self, df1: pd.DataFrame, df2: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def _inspect_condition_overlap(self, df1: pd.DataFrame, df2: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
         df1_conds = df1[self.exp_condition_cols].drop_duplicates()
         df2_conds = df2[self.exp_condition_cols].drop_duplicates()
-        temp_merge = df1_conds.merge(df2_conds, how="outer", indicator="which")
-        df1_only_conds = temp_merge.loc[temp_merge["which"] == "left_only"]
-        df2_only_conds = temp_merge.loc[temp_merge["which"] == "right_only"]
+        indicator = "which"
+        outer_merge = merge_dfs_with_float_columns(df1=df1_conds, df2=df2_conds,
+                                                   on=None, how="outer", indicator=indicator)
+
+        df1_only_conds = outer_merge.loc[outer_merge[indicator] == "left_only"]
+        df2_only_conds = outer_merge.loc[outer_merge[indicator] == "right_only"]
         return df1_only_conds, df2_only_conds
 
-    def _investigate_genes_per_condition_overlap(self, df1: pd.DataFrame, df2: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        df1 = df1[self.feature_and_index_cols]
-        df2 = df2[self.feature_and_index_cols]
+    def _inspect_col_overlap_per_condition(self, df1: pd.DataFrame, df2: pd.DataFrame,
+                                           column: str = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        if column is None:
+            column = self.per_condition_index_col
+        if (column == self.per_condition_index_col) and (self.__class__.__name__ == "CircuitFluorescenceModel"):
+            df2 = self.add_index_per_existing_condition(df2)
+        df1 = df1[self.exp_condition_cols + [column]]
+        df2 = df2[self.exp_condition_cols + [column]]
         df1_conds = df1[self.exp_condition_cols].drop_duplicates()
         df2_conds = df2[self.exp_condition_cols].drop_duplicates()
-        joint_conds_only = df1_conds.merge(df2_conds, on=self.exp_condition_cols, how="inner")
+        joint_conds_only = merge_dfs_with_float_columns(df1=df1_conds, df2=df2_conds,
+                                                        on=self.exp_condition_cols, how="inner")
 
+        # creates multi-index from the condition column values in each DataFrame
         keys = list(joint_conds_only.columns.values)
         idx1 = df1.set_index(keys).index
         idx2 = df2.set_index(keys).index
-        idxj = joint_conds_only.set_index(keys).index
+        idx_joint = joint_conds_only.set_index(keys).index
+        # subsets the DataFrames to only keep rows that belong to conditions that exist in joint_conds_only
+        df1_col_vals_per_mutual_cond = df1[idx1.isin(idx_joint)]
+        df2_col_vals_per_mutual_cond = df2[idx2.isin(idx_joint)]
 
-        df1_genes_per_mutual_condition = df1[idx1.isin(idxj)]
-        df2_genes_per_mutual_condition = df2[idx2.isin(idxj)]
+        indicator = "which"
+        outer_merge = merge_dfs_with_float_columns(df1=df1_col_vals_per_mutual_cond, df2=df2_col_vals_per_mutual_cond,
+                                                   on=None, how="outer", indicator=indicator)
+        only_df1_col_vals_per_mutual_cond = outer_merge.loc[outer_merge[indicator] == "left_only"]
+        only_df2_col_vals_per_mutual_cond = outer_merge.loc[outer_merge[indicator] == "right_only"]
+        only_df1_col_vals_per_mutual_cond.drop(columns=[indicator], inplace=True)
+        only_df2_col_vals_per_mutual_cond.drop(columns=[indicator], inplace=True)
 
-        temp_merge = df1_genes_per_mutual_condition.merge(df2_genes_per_mutual_condition, how="outer", indicator="which")
-        only_df1_genes_per_mutual_condition = temp_merge.loc[temp_merge["which"] == "left_only"]
-        only_df2_genes_per_mutual_condition = temp_merge.loc[temp_merge["which"] == "right_only"]
+        print(only_df1_col_vals_per_mutual_cond)
+        print()
 
-        return only_df1_genes_per_mutual_condition, only_df2_genes_per_mutual_condition
+        df1_col_summary_per_mutual_cond = only_df1_col_vals_per_mutual_cond.groupby(
+            self.exp_condition_cols, as_index=False).agg(
+            {
+                column: [("{}_count".format(column), "count"),
+                         ("{}_mode".format(column), lambda x: x.value_counts().index[0])]
+            })
+
+        df2_col_summary_per_mutual_cond = only_df2_col_vals_per_mutual_cond.groupby(
+            self.exp_condition_cols, as_index=False).agg(
+            {
+                column: [("{}_count".format(column), "count"),
+                         ("{}_mode".format(column), lambda x: x.value_counts().index[0])]
+            })
+
+        return df1_col_summary_per_mutual_cond, df2_col_summary_per_mutual_cond
 
     def evaluate_predictions(self, new_data_df):
         '''
@@ -299,7 +332,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         self.df_preds = df_preds[self.feature_and_index_cols + [target_pred_col]]
         self.combined_df = self._align_predictions_with_new_data(predictions_df=self.df_preds, new_data_df=new_data_df)
 
-        pred_only_conds, new_data_only_conds = self._investigate_condition_overlap(df1=self.df_preds, df2=new_data_df)
+        pred_only_conds, new_data_only_conds = self._inspect_condition_overlap(df1=self.df_preds, df2=new_data_df)
         if len(pred_only_conds) != 0:
             warnings.warn("The following conditions exist only in the predicted data "
                           "and do not exist in the new experimental data:\n\n{}\n\n".format(pred_only_conds))
@@ -307,13 +340,17 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
             warnings.warn("The following conditions exist only in the new experimental data "
                           "and do not exist in the predicted data:\n\n{}\n\n".format(new_data_only_conds))
 
-        pred_only_genes, new_data_only_genes = self._investigate_genes_per_condition_overlap(df1=self.df_preds, df2=new_data_df)
-        if len(pred_only_genes) != 0:
-            warnings.warn("Within mutual conditions, the following genes exist only in the predicted data "
-                          "and do not exist in the new experimental data:\n\n{}\n\n".format(pred_only_genes))
-        if len(new_data_only_genes) != 0:
-            warnings.warn("Within mutual conditions, the following genes exist only in the new experimental data "
-                          "and do not exist in the predicted data:\n\n{}\n\n".format(new_data_only_genes))
+        column_to_inspect = self.per_condition_index_col
+        pred_only_col_vals, new_data_only_col_vals = self._inspect_col_overlap_per_condition(df1=self.df_preds, df2=new_data_df,
+                                                                                             column=column_to_inspect)
+        if len(pred_only_col_vals) != 0:
+            warnings.warn("Within mutual conditions, the following {}s exist only in the predicted data "
+                          "and do not exist in the new experimental data:\n\n{}\n\n".format(column_to_inspect,
+                                                                                            pred_only_col_vals))
+        if len(new_data_only_col_vals) != 0:
+            warnings.warn("Within mutual conditions, the following {}s exist only in the new experimental data "
+                          "and do not exist in the predicted data:\n\n{}\n\n".format(column_to_inspect,
+                                                                                     new_data_only_col_vals))
 
         # ranked_results = self.rank_results(results_df=self.combined_df, control_col=self.target_col,
         #                                    prediction_col=target_pred_col, rank_name="ratio_based_ranking")
@@ -327,3 +364,32 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         :return:
         '''
         self.feature_and_index_cols = self.feature_and_index_cols_copy.copy()
+
+
+def merge_dfs_with_float_columns(df1: pd.DataFrame, df2: pd.DataFrame, on: Optional[list] = None, how: str = "inner",
+                                 indicator: Union[str, bool] = False, decimal_places: int = 10):
+    """
+    This function is for rounding float columns in two DataFrames before merging them.
+    We need to do this because otherwise floating-point errors will affect our merge in an undesirable way.
+    I.e. when merging, Pandas will think 0.00006 in one DataFrame is different from 0.00006 in the other DataFrame.
+    :param df1: first DataFrame
+    :param df2: second DataFrame
+    :param on: Columns that you are planning to merge on.
+               These will be checked for float columns and the float columns will be rounded.
+               If on is None, then defaults to the intersection of the columns in df1 and df2.
+    :param how: type of join (inner, outer, etc)
+    :param indicator: what the indicator column should be called (if not False)
+    :param decimal_places: number of decimal places to round the floats to. I've found that 10 gets the job done for our data sets.
+    :return: correctly merged DataFrame
+    """
+    if on is None:
+        on = list(set(df1.columns.values).intersection(set(df2.columns.values)))
+
+    float_cols_1 = df1[on].select_dtypes(include=[float]).columns.values
+    float_cols_2 = df2[on].select_dtypes(include=[float]).columns.values
+    if set(float_cols_1) != set(float_cols_2):
+        warnings.warn("float_cols_1 is not the same as float_cols_2 !")
+    df1[float_cols_1] = df1[float_cols_1].round(decimal_places)
+    df2[float_cols_2] = df2[float_cols_2].round(decimal_places)
+    merged_df = pd.merge(df1, df2, how=how, on=on, indicator=indicator)
+    return merged_df
