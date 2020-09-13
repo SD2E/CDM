@@ -259,9 +259,18 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
 
     def _inspect_col_overlap_per_condition(self, df1: pd.DataFrame, df2: pd.DataFrame,
                                            column: str = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        # these two lines do two important things by calling round_float_cols_in_df:
+        #    1. make copies of df1 and df2, so that the passed-in DataFrames are not altered by this method
+        #    2. undertake float columns through rounding to avoid mismatches during the multi-index + subsetting lines
+        df1, _ = round_float_cols_in_df(df=df1, cols_to_check=self.exp_condition_cols)
+        df2, _ = round_float_cols_in_df(df=df2, cols_to_check=self.exp_condition_cols)
+
         if column is None:
             column = self.per_condition_index_col
         if (column == self.per_condition_index_col) and (self.__class__.__name__ == "CircuitFluorescenceModel"):
+            # this next line can give a different df from sampled_new_df_with_dist_position in the _align_predictions_with_new_data
+            # method of the CFM class. But it shouldn't matter because this method is just checking to see if the values
+            # in the column of interest overlap, not what they map to in other columns.
             df2 = self.add_index_per_existing_condition(df2)
         df1 = df1[self.exp_condition_cols + [column]]
         df2 = df2[self.exp_condition_cols + [column]]
@@ -286,9 +295,6 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         only_df2_col_vals_per_mutual_cond = outer_merge.loc[outer_merge[indicator] == "right_only"]
         only_df1_col_vals_per_mutual_cond.drop(columns=[indicator], inplace=True)
         only_df2_col_vals_per_mutual_cond.drop(columns=[indicator], inplace=True)
-
-        print(only_df1_col_vals_per_mutual_cond)
-        print()
 
         df1_col_summary_per_mutual_cond = only_df1_col_vals_per_mutual_cond.groupby(
             self.exp_condition_cols, as_index=False).agg(
@@ -366,8 +372,24 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         self.feature_and_index_cols = self.feature_and_index_cols_copy.copy()
 
 
+def round_float_cols_in_df(df: pd.DataFrame, cols_to_check: Optional[list] = None,
+                           decimal_places: int = 10) -> Tuple[pd.DataFrame, list]:
+    """
+    Finds the float columns in the given DataFrame (only from among cols_to_check) and
+    rounds them to the desired number of decimal places.
+    :param df: the DataFrame we want to operate on.
+    :param cols_to_check: columns within df to check for float columns. If set to None, all columns will be checked.
+    :param decimal_places: number of decimal places to round the floats to. I've found that 10 is good for our data sets so far.
+    :return: Returns Tuple of (updated DataFrame with rounded float columns, list of float columns whose values were rounded).
+    """
+    df = df.copy()  # don't want to change the passed-in DataFrames, so make a copy
+    float_cols = list(df[cols_to_check].select_dtypes(include=[float]).columns.values)
+    df[float_cols] = df[float_cols].round(decimal_places)
+    return df, float_cols
+
+
 def merge_dfs_with_float_columns(df1: pd.DataFrame, df2: pd.DataFrame, on: Optional[list] = None, how: str = "inner",
-                                 indicator: Union[str, bool] = False, decimal_places: int = 10):
+                                 indicator: Union[str, bool] = False, decimal_places: int = 10) -> pd.DataFrame:
     """
     This function is for rounding float columns in two DataFrames before merging them.
     We need to do this because otherwise floating-point errors will affect our merge in an undesirable way.
@@ -379,17 +401,15 @@ def merge_dfs_with_float_columns(df1: pd.DataFrame, df2: pd.DataFrame, on: Optio
                If on is None, then defaults to the intersection of the columns in df1 and df2.
     :param how: type of join (inner, outer, etc)
     :param indicator: what the indicator column should be called (if not False)
-    :param decimal_places: number of decimal places to round the floats to. I've found that 10 gets the job done for our data sets.
+    :param decimal_places: number of decimal places to round the floats to. I've found that 10 is good for our data sets so far.
     :return: correctly merged DataFrame
     """
     if on is None:
         on = list(set(df1.columns.values).intersection(set(df2.columns.values)))
 
-    float_cols_1 = df1[on].select_dtypes(include=[float]).columns.values
-    float_cols_2 = df2[on].select_dtypes(include=[float]).columns.values
+    rounded_df1, float_cols_1 = round_float_cols_in_df(df=df1, cols_to_check=on, decimal_places=decimal_places)
+    rounded_df2, float_cols_2 = round_float_cols_in_df(df=df2, cols_to_check=on, decimal_places=decimal_places)
     if set(float_cols_1) != set(float_cols_2):
         warnings.warn("float_cols_1 is not the same as float_cols_2 !")
-    df1[float_cols_1] = df1[float_cols_1].round(decimal_places)
-    df2[float_cols_2] = df2[float_cols_2].round(decimal_places)
-    merged_df = pd.merge(df1, df2, how=how, on=on, indicator=indicator)
+    merged_df = pd.merge(rounded_df1, rounded_df2, how=how, on=on, indicator=indicator)
     return merged_df
