@@ -37,9 +37,8 @@ class HostResponseModel(CombinatorialDesignModel):
             self.impact_thresholds = {"nlogFDR": (operator.lt, 0.05), "logFC": (operator.gt, 1.1)}
         else:
             self.impact_thresholds = impact_thresholds
-        if self.impact_thresholds is not False:
+        if (self.impact_thresholds is not False) and (self.existing_data is not None):
             self.existing_data = self._create_impact_column(self.existing_data)
-        print(self.existing_data)
 
     def add_index_per_existing_condition(self, initial_data):
         """
