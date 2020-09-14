@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import wasserstein_distance
 from cdm_src.utils.names import Names as N
 from harness.utils.parsing_results import *
-from cdm_src.cdm_base_class import CombinatorialDesignModel
+from cdm_src.cdm_base_class import CombinatorialDesignModel, merge_dfs_with_float_columns
 
 
 class CircuitFluorescenceModel(CombinatorialDesignModel):
@@ -71,16 +71,9 @@ class CircuitFluorescenceModel(CombinatorialDesignModel):
 
         # This code block is for rounding float columns in our two DataFrames.
         # We need to do this because otherwise floating-point errors will affect our merge in an undesirable way.
-        # I.e. when merging, Pandas will think 0.00006 in one DataFrame is different form 0.00006 in the other DataFrame.
-        float_cols_1 = sampled_new_df_with_dist_position[self.feature_and_index_cols].select_dtypes(include=[float]).columns.values
-        float_cols_2 = predictions_df[self.feature_and_index_cols].select_dtypes(include=[float]).columns.values
-        if set(float_cols_1) != set(float_cols_2):
-            warnings.warn("float_cols_1 is not the same as float_cols_2 !", stacklevel=100000)
-        sampled_new_df_with_dist_position[float_cols_1] = sampled_new_df_with_dist_position[float_cols_1].round(10)
-        predictions_df[float_cols_2] = predictions_df[float_cols_2].round(10)
-
-        merged_df = pd.merge(sampled_new_df_with_dist_position, predictions_df,
-                             how="inner", on=self.feature_and_index_cols)
+        # I.e. when merging, Pandas will think 0.00006 in one DataFrame is different from 0.00006 in the other DataFrame.
+        merged_df = merge_dfs_with_float_columns(df1=sampled_new_df_with_dist_position, df2=predictions_df,
+                                                 on=self.feature_and_index_cols, how="inner")
         len_preds = len(predictions_df)
         len_new_data = len(new_data_df)
         len_sampled_df = len(sampled_new_df_with_dist_position)
@@ -93,8 +86,7 @@ class CircuitFluorescenceModel(CombinatorialDesignModel):
                                             len_sampled_df, len_merged))
         if not (len_merged == len_sampled_df == len_new_data == len_preds):
             warnings.warn("These 4 DataFrames are not equal in length: "
-                          "merged_df, sampled_new_df_with_dist_position, new_data_df, predictions_df\n",
-                          stacklevel=100000)
+                          "merged_df, sampled_new_df_with_dist_position, new_data_df, predictions_df\n")
 
         return merged_df
 
