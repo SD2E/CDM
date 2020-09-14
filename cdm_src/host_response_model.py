@@ -13,32 +13,11 @@ from cdm_src.cdm_base_class import CombinatorialDesignModel
 
 class HostResponseModel(CombinatorialDesignModel):
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
-                 exp_condition_cols=None, target_col="logFC", gene_col="gene",
-                 impact_thresholds: Dict[str, Tuple[Callable, float]] = None):
-        """
-
-        :param initial_data:
-        :param output_path:
-        :param leaderboard_query:
-        :param exp_condition_cols:
-        :param target_col:
-        :param gene_col:
-        :param impact_thresholds: Dictionary with string keys (column names) and tuple values that defines thresholds per column.
-                                    The tuples should be (operator function, float)
-                                    None defaults to {"nlogFDR": (operator.lt, 0.05), "logFC": (operator.gt, 1.1)}
-                                    Set equal to False if you don't want an impact threshold column.
-        """
+                 exp_condition_cols=None, target_col="logFC", gene_col="gene"):
         self.per_condition_index_col = gene_col
         self.gene_network_df = None
         super().__init__(initial_data, output_path, leaderboard_query,
                          exp_condition_cols, target_col)
-
-        if impact_thresholds is None:
-            self.impact_thresholds = {"nlogFDR": (operator.lt, 0.05), "logFC": (operator.gt, 1.1)}
-        else:
-            self.impact_thresholds = impact_thresholds
-        if (self.impact_thresholds is not False) and (self.existing_data is not None):
-            self.existing_data = self._create_impact_column(self.existing_data)
 
     def add_index_per_existing_condition(self, initial_data):
         """
@@ -62,11 +41,28 @@ class HostResponseModel(CombinatorialDesignModel):
         future_conditions_df = future_conditions_df.explode(self.per_condition_index_col).reset_index(drop=True)
         return future_conditions_df
 
-    def _create_impact_column(self, df):
-        impacted = pd.concat([y[0](df[x], y[1]) for x, y in self.impact_thresholds.items()],
-                             axis=1).all(axis=1)
-        df[N.impact_col] = impacted
-        return df
+    def set_impact_col(self, nlogFDR_threshold: float = 0.05, logFC_threshold: float = 1.1):
+        """
+        Adds (or updates) the impact column of both self.existing_data and self.combined_df (if they exist)
+        :param nlogFDR_threshold: Threshold for nlogFDR to consider as impacted.
+                                  Will look for nlogFDR values less than this threshold.
+        :param logFC_threshold: Threshold for logFC to consider as impacted.
+                                Will look for logFC values with absolute value greater than this threshold.
+        :return:
+        """
+        if hasattr(self, "existing_data"):
+            df = self.existing_data
+            if isinstance(df, pd.DataFrame):
+                df[N.impact_col] = False
+                df.loc[(df["nlogFDR"] < nlogFDR_threshold) &
+                       (np.abs(df["logFC"]) > logFC_threshold), N.impact_col] = True
+        if hasattr(self, "combined_df"):
+            df = self.combined_df
+            if isinstance(df, pd.DataFrame):
+                print("combined_df")
+                df[N.impact_col] = False
+                df.loc[(df["nlogFDR"] < nlogFDR_threshold) &
+                       (np.abs(df["logFC"]) > logFC_threshold), N.impact_col] = True
 
     def _align_predictions_with_new_data(self, predictions_df, new_data_df):
         new_data_cols = list(new_data_df.columns.values)
