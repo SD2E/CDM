@@ -13,6 +13,8 @@ from typing import Union
 from pathlib import Path
 import data
 from cdm_src.utils.process_data_converge_files import process_file_from_data_converge
+from cdm_src.circuit_fluorescence_model import CircuitFluorescenceModel
+from cdm_src.host_response_model import HostResponseModel
 
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.width', 10000)
@@ -74,3 +76,48 @@ def load_HRM_demo_data(percent: Union[int, float] = 10) -> pd.DataFrame:
     # print(hrm_demo_data, "\n")
 
     return hrm_demo_data
+
+
+def create_fake_CFM_exp_data(cfm_target_col='BL1-A', cfm_experimental_condition_cols=None):
+    """
+    Creates a DataFrame with fake "new experimental data" for testing purposes.
+    Does this by instantiating a temporary CFM model and using the future_data it generates as a template.
+    Then the template is filled with fake data.
+    :return: DataFrame of fake experimental data
+    """
+    cfm_data = load_CFM_demo_data()
+    if cfm_experimental_condition_cols is None:
+        cfm_experimental_condition_cols = ['strain_name', 'inducer_concentration_mM']
+
+    temp_cfm = CircuitFluorescenceModel(initial_data=cfm_data, exp_condition_cols=cfm_experimental_condition_cols,
+                                        target_col=cfm_target_col)
+    new_experiment_data_fake = temp_cfm.future_data.copy()
+    # dropping dist_position since future data won't have it. Instead the CFM evaluate method will generate dist_position
+    new_experiment_data_fake.drop(columns=["dist_position"], inplace=True)
+    cfm_target_min = cfm_data[cfm_target_col].min()
+    cfm_target_max = cfm_data[cfm_target_col].max()
+    new_experiment_data_fake[cfm_target_col] = np.random.randint(cfm_target_min, cfm_target_max, len(new_experiment_data_fake))
+    # create fake replicates
+    new_experiment_data_fake["replicate"] = np.random.randint(1, 4, len(new_experiment_data_fake))
+    return new_experiment_data_fake
+
+
+def create_fake_HRM_exp_data(hrm_target_col="logFC_wt", hrm_experimental_condition_cols=None):
+    """
+    Creates a DataFrame with fake "new experimental data" for testing purposes.
+    Does this by instantiating a temporary HRM model and using the future_data it generates as a template.
+    Then the template is filled with fake data.
+    :return: DataFrame of fake experimental data
+    """
+    hrm_data = load_HRM_demo_data()
+    if hrm_experimental_condition_cols is None:
+        hrm_experimental_condition_cols = ["ca_concentration", "iptg_concentration", "va_concentration",
+                                           "xylose_concentration", "timepoint_5.0", "timepoint_18.0"]
+
+    temp_hrm = HostResponseModel(initial_data=hrm_data, exp_condition_cols=hrm_experimental_condition_cols,
+                                 target_col=hrm_target_col)
+    new_experiment_data_fake = temp_hrm.future_data.copy()
+    hrm_target_min = hrm_data[hrm_target_col].min()
+    hrm_target_max = hrm_data[hrm_target_col].max()
+    new_experiment_data_fake[hrm_target_col] = np.random.randint(hrm_target_min, hrm_target_max, len(new_experiment_data_fake))
+    return new_experiment_data_fake
