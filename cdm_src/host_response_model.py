@@ -41,7 +41,7 @@ class HostResponseModel(CombinatorialDesignModel):
         future_conditions_df = future_conditions_df.explode(self.per_condition_index_col).reset_index(drop=True)
         return future_conditions_df
 
-    def set_impact_col(self, nlogFDR_threshold: float = 0.05, logFC_threshold: float = 1.1):
+    def set_impact_col(self, FDR_threshold: float = 0.05, logFC_threshold: float = 1.1):
         """
         Adds (or updates) the impact column of both self.existing_data and self.combined_df (if they exist)
         :param nlogFDR_threshold: Threshold for nlogFDR to consider as impacted.
@@ -54,14 +54,14 @@ class HostResponseModel(CombinatorialDesignModel):
             df = self.existing_data
             if isinstance(df, pd.DataFrame):
                 df[N.impact_col] = False
-                df.loc[(df["nlogFDR"] < nlogFDR_threshold) &
+                df.loc[(df["FDR"] < FDR_threshold) &
                        (np.abs(df["logFC"]) > logFC_threshold), N.impact_col] = True
         if hasattr(self, "combined_df"):
             df = self.combined_df
             if isinstance(df, pd.DataFrame):
                 print("combined_df")
                 df[N.impact_col] = False
-                df.loc[(df["nlogFDR"] < nlogFDR_threshold) &
+                df.loc[(df["FDR"] < FDR_threshold) &
                        (np.abs(df["logFC"]) > logFC_threshold), N.impact_col] = True
 
     def _align_predictions_with_new_data(self, predictions_df, new_data_df):
