@@ -27,27 +27,35 @@ class DE_multioutput_DEA(KerasRegression):
 
 
         # Configure the output
-        y_temp = pd.DataFrame(y.tolist(), index=y.index, columns=['impacted_col', 'regulation_col','logFC_col'])
-        y1 = y_temp['impacted_col']
+        # y_temp = pd.DataFrame(y.tolist(), index=y.index, columns=['impacted_col', 'regulation_col','logFC_col'])
+        y_temp = pd.DataFrame(y.tolist(), index=y.index, columns=['regulation_col','logFC_col'])
+
+        # y1 = y_temp['impacted_col']
         y2 = y_temp['regulation_col']
         y3 = y_temp['logFC_col']
 
-        print("Length of ys", len(y1), len(y2))
-        self.model.fit(X, [y1, y2,y3], epochs=self.epochs, batch_size=self.batch_size, verbose=self.verbose)
+        # print("Length of ys", len(y1), len(y2))
+        # self.model.fit(X, [y1, y2,y3], epochs=self.epochs, batch_size=self.batch_size, verbose=self.verbose)
+        self.model.fit(X, [y2, y3], epochs=self.epochs, batch_size=self.batch_size, verbose=self.verbose)
         # self.model.load_weights(checkpoint_filepath)
         # os.remove(checkpoint_filepath)
 
     def _predict(self, X):
 
-        y1, y2,y3 = self.model.predict(X)
+        # y1, y2,y3 = self.model.predict(X)
+        y2,y3 = self.model.predict(X)
 
-        merged1 = list(itertools.chain(*y1))
+
+        # merged1 = list(itertools.chain(*y1))
         merged2 = list(itertools.chain(*y2))
         merged3 = list(itertools.chain(*y3))
 
-        preds = list(zip(merged1, merged2,merged3))
+        preds = list(zip(merged2,merged3))
 
         return preds
+
+
+
 
 
 def DE_multioutput_DEA_model(num_condition_cols, emb_dim=32, batch_size=10000, epochs=25,
@@ -56,20 +64,25 @@ def DE_multioutput_DEA_model(num_condition_cols, emb_dim=32, batch_size=10000, e
     input = Input(shape=(num_condition_cols+emb_dim,))
     model = Dense(16, activation='relu')(input)
     model = Dense(4,  activation='relu')(model)
+    model = Dense(2,  activation='relu')(model)
 
-    impact_pred = Dense(1,activation='sigmoid',name='impacted_pred')(model)
+    # impact_pred = Dense(1,activation='sigmoid',name='impacted_pred')(model)
     regulation_pred = Dense(1, activation='sigmoid',name='regulation_pred')(model)
     de_prediction_layer = Dense(1, activation='linear', name='de_pred')(model)
 
+    def de_loss():
+        #mae + k*sign_change()
+        #consider making k a function of logFC
+
+        pass
+
 
     # Create model
-    model = Model(inputs=[input], outputs=[impact_pred,regulation_pred,de_prediction_layer])
+    model = Model(inputs=[input], outputs=[regulation_pred,de_prediction_layer])
 
-    model.compile(loss={'impacted_pred': 'binary_crossentropy',
-                        'regulation_pred':'binary_crossentropy',
+    model.compile(loss={'regulation_pred':'binary_crossentropy',
                         'de_pred': 'mean_absolute_error'}, optimizer=Adam(lr=learning_rate),
-                  metrics={'impacted_pred': 'binary_crossentropy',
-                           'regulation_pred': 'binary_crossentropy',
+                  metrics={'regulation_pred': 'binary_crossentropy',
                            'de_pred': 'mse'})
 
     th_model = DE_multioutput_DEA(model=model, model_author="Mohammed",
