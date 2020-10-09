@@ -83,11 +83,11 @@ class HostResponseModel(CombinatorialDesignModel):
     def score(self, x, y):
         return r2_score(x, y)
 
-    def embed_prior_network(self, df_network, src_node='Source', tgt_node='Target', attrs=['Weight'],
-                            emb_dim=32, workers=4, debug=False):
+    def embed_prior_network(self, df_network=None, src_node='Source', tgt_node='Target', attrs=['Weight'],
+                            emb_dim=32, workers=4, debug=False,write_out=False):
         '''
         Provide a dataframe in the form of an edge list and embed the network
-        :param df_network: pd.Dataframe, dataframe of network
+        :param df_network: pd.Dataframe, dataframe of network. if nothing is passed in
         :param src_node: str, source column name in dataframe
         :param tgt_node: str, target column name in dataframe
         :param weight: list of attributes to attach to edges
@@ -97,27 +97,39 @@ class HostResponseModel(CombinatorialDesignModel):
         :return:
         '''
 
-        from node2vec import Node2Vec
-        import networkx as nx
+        if df_network:
+            from node2vec import Node2Vec
+            import networkx as nx
 
-        G = nx.convert_matrix.from_pandas_edgelist(df_network, src_node, tgt_node, attrs)
-        if not debug:
-            print("Building model...")
-            node2vec = Node2Vec(G, dimensions=emb_dim, walk_length=30, num_walks=200, workers=workers)
-            print()
-            print("Fitting model...")
-            model = node2vec.fit(window=10, min_count=1, batch_words=4)
+            G = nx.convert_matrix.from_pandas_edgelist(df_network, src_node, tgt_node, attrs)
+            if not debug:
+                print("Building model...")
+                node2vec = Node2Vec(G, dimensions=emb_dim, walk_length=30, num_walks=200, workers=workers)
+                print()
+                print("Fitting model...")
+                model = node2vec.fit(window=10, min_count=1, batch_words=4)
+            else:
+                print("-" * 20, 'Entering DEBUG Mode', '-' * 20)
+                print("Building model...")
+                node2vec = Node2Vec(G, dimensions=emb_dim, walk_length=5, num_walks=10, workers=workers)  # For debugging purposes
+                print("Fitting model...")
+                model = node2vec.fit(window=2, min_count=1, batch_words=2)  # For debugging purposes
+
+            df_emb = pd.DataFrame(np.asarray(model.wv.vectors), columns=['embcol_' + str(i) for i in range(emb_dim)], index=G.nodes)
+            df_emb.reset_index(inplace=True)
+            df_emb.rename({df_emb.columns[0]: self.per_condition_index_col}, axis=1, inplace=True)
+            df_emb['emb_present'] = 1
+
+            if write_out:
+                fname = os.path.join(self.output_path,'network_embedding.csv')
+                df_emb.to_csv(fname,index=False)
         else:
-            print("-" * 20, 'Entering DEBUG Mode', '-' * 20)
-            print("Building model...")
-            node2vec = Node2Vec(G, dimensions=emb_dim, walk_length=5, num_walks=10, workers=workers)  # For debugging purposes
-            print("Fitting model...")
-            model = node2vec.fit(window=2, min_count=1, batch_words=2)  # For debugging purposes
+            try:
+                fname = os.path.join(self.output_path, 'network_embedding.csv')
+                df_emb = pd.read_csv(fname)
+            except:
+                raise ValueError('No previous network embedding found. You must provide a df_network.')
 
-        df_emb = pd.DataFrame(np.asarray(model.wv.vectors), columns=['embcol_' + str(i) for i in range(emb_dim)], index=G.nodes)
-        df_emb.reset_index(inplace=True)
-        df_emb.rename({df_emb.columns[0]: self.per_condition_index_col}, axis=1, inplace=True)
-        df_emb['emb_present'] = 1
         self.existing_data = pd.merge(self.existing_data, df_emb, how='left', on=self.per_condition_index_col)
         self.existing_data['emb_present'].fillna(0, inplace=True)
         self.future_data = pd.merge(self.future_data, df_emb, how='left', on=self.per_condition_index_col)
