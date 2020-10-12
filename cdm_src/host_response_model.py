@@ -97,7 +97,7 @@ class HostResponseModel(CombinatorialDesignModel):
         :return:
         '''
 
-        if df_network:
+        if df_network is not None:
             from node2vec import Node2Vec
             import networkx as nx
 
