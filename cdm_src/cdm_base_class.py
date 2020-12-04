@@ -39,8 +39,9 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         :param leaderboard_query:
         :param exp_condition_cols:
         :param target_col:
-        :param custom_future_conditions: None or DataFrame with exp_condition_cols as its columns.
-                                         Each row represents a condition. This variable is used by the user
+        :param custom_future_conditions: None, or a DataFrame with exp_condition_cols as its columns.
+                                         Each row should represent a condition. Rows do not have to be unique,
+                                         as the code will ignore duplicates. This variable is used by the user
                                          to give a custom set of conditions to predict on when they don't want
                                          the default of all possible conditions to be predicted.
         """
@@ -121,7 +122,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         generates and returns a dataframe of experimental conditions that lack data
         """
         if custom_future_conditions is not None:
-            future_conditions = list(custom_future_conditions.itertuples(index=False, name=None))
+            future_conditions = list(set(custom_future_conditions.itertuples(index=False, name=None)))
             print('{} conditions will be predicted (derived from the passed-in '
                   'custom_future_conditions DataFrame)\n'.format(len(future_conditions)))
         else:

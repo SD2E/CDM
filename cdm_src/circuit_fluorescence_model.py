@@ -17,6 +17,20 @@ class CircuitFluorescenceModel(CombinatorialDesignModel):
                  exp_condition_cols=None, target_col="BL1-A",
                  custom_future_conditions: Optional[pd.DataFrame] = None,
                  num_per_condition_indices=20000):
+        """
+
+        :param initial_data:
+        :param output_path:
+        :param leaderboard_query:
+        :param exp_condition_cols:
+        :param target_col:
+        :param custom_future_conditions: None, or a DataFrame with exp_condition_cols as its columns.
+                                         Each row should represent a condition. Rows do not have to be unique,
+                                         as the code will ignore duplicates. This variable is used by the user
+                                         to give a custom set of conditions to predict on when they don't want
+                                         the default of all possible conditions to be predicted.
+        :param num_per_condition_indices:
+        """
         self.per_condition_index_col = "dist_position"
         self.num_per_condition_indices = num_per_condition_indices
         super().__init__(initial_data, output_path, leaderboard_query,
