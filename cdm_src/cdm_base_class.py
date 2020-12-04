@@ -30,7 +30,20 @@ warnings.formatwarning = custom_formatwarning
 
 class CombinatorialDesignModel(metaclass=ABCMeta):
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
-                 exp_condition_cols=None, target_col="BL1-A"):
+                 exp_condition_cols=None, target_col="BL1-A",
+                 custom_future_conditions: Optional[pd.DataFrame] = None):
+        """
+
+        :param initial_data:
+        :param output_path:
+        :param leaderboard_query:
+        :param exp_condition_cols:
+        :param target_col:
+        :param custom_future_conditions: None or DataFrame with exp_condition_cols as its columns.
+                                         Each row represents a condition. This variable is used by the user
+                                         to give a custom set of conditions to predict on when they don't want
+                                         the default of all possible conditions to be predicted.
+        """
         # if type(self) == CombinatorialDesignModel:
         #     raise Exception("CombinatorialDesignModel class may not be instantiated.\n"
         #                     "Please use HostResponseModel or CircuitFluorescenceModel instead.")
@@ -54,7 +67,7 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         if self.leaderboard_query is None:
             # set existing_data and generate future_data
             self.existing_data = self.add_index_per_existing_condition(initial_data)
-            self.future_data = self.generate_future_conditions_df()
+            self.future_data = self.generate_future_conditions_df(custom_future_conditions=custom_future_conditions)
         else:
             self.existing_data = None
             query_matches = query_leaderboard(query=self.leaderboard_query, th_output_location=self.output_path)
@@ -103,11 +116,16 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
     def add_index_per_future_condition(self, future_conditions):
         pass
 
-    def generate_future_conditions_df(self):
+    def generate_future_conditions_df(self, custom_future_conditions):
         """
         generates and returns a dataframe of experimental conditions that lack data
         """
-        future_conditions = self.retrieve_future_conditions()
+        if custom_future_conditions is not None:
+            future_conditions = list(custom_future_conditions.itertuples(index=False, name=None))
+            print('{} conditions will be predicted (derived from the passed-in '
+                  'custom_future_conditions DataFrame)\n'.format(len(future_conditions)))
+        else:
+            future_conditions = self.retrieve_future_conditions()
         future_conditions_df = self.add_index_per_future_condition(future_conditions)
 
         return future_conditions_df

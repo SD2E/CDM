@@ -4,6 +4,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from typing import Optional
 import matplotlib.pyplot as plt
 from scipy.stats import wasserstein_distance
 from cdm_src.utils.names import Names as N
@@ -13,11 +14,13 @@ from cdm_src.cdm_base_class import CombinatorialDesignModel, merge_dfs_with_floa
 
 class CircuitFluorescenceModel(CombinatorialDesignModel):
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
-                 exp_condition_cols=None, target_col="BL1-A", num_per_condition_indices=20000):
+                 exp_condition_cols=None, target_col="BL1-A",
+                 custom_future_conditions: Optional[pd.DataFrame] = None,
+                 num_per_condition_indices=20000):
         self.per_condition_index_col = "dist_position"
         self.num_per_condition_indices = num_per_condition_indices
         super().__init__(initial_data, output_path, leaderboard_query,
-                         exp_condition_cols, target_col)
+                         exp_condition_cols, target_col, custom_future_conditions)
 
     def add_index_per_existing_condition(self, initial_data):
         """
