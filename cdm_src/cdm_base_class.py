@@ -89,15 +89,15 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         permutations = set(itertools.product(*unique_column_values))
         temp_df = self.existing_data[self.exp_condition_cols].drop_duplicates()
         existing_conditions = set(zip(*[temp_df[column].values for column in self.exp_condition_cols]))
-        future_condtions = permutations - existing_conditions
+        future_conditions = permutations - existing_conditions
         existing_conditions = list(existing_conditions)
-        future_condtions = list(future_condtions)
+        future_conditions = list(future_conditions)
 
         print('Input dataframe contains {0} conditions out of {1} possible conditions'
               '\nThere are {2} conditions to be predicted\n'.format(len(existing_conditions),
                                                                     len(permutations),
-                                                                    len(future_condtions)))
-        return future_condtions
+                                                                    len(future_conditions)))
+        return future_conditions
 
     @abstractmethod
     def add_index_per_future_condition(self, future_conditions):
