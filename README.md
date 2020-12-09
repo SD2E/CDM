@@ -16,4 +16,4 @@ for more details.
 Instead do `pip3 install ./cdm` so pip knows to look at for a directory.
 - For editable mode, it doesn't matter so feel free to do `pip3 install -e cdm`.
 
-**Note 2:** On Maverick2 you might not be able to install this package unless you use `-e` and `--user`: e.g. `pip3 install -e cdm --user`
+**Note 2:** On TACC you might not be able to install this package unless you use `-e` **and/or** `--user`: e.g. `pip3 install -e cdm --user`.
