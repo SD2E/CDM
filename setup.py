@@ -19,6 +19,7 @@ setup(
         "keras",
         "pandas",
         "sklearn",
-        "seaborn"
+        "seaborn",
+        "node2vec"
     ]
 )
