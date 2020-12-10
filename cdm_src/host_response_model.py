@@ -177,8 +177,7 @@ class HostResponseModel(CombinatorialDesignModel):
             self.existing_data.drop(columns=[emb_present] +
                                             [col for col in self.existing_data.columns.values if embcol_ in col],
                                     inplace=True)
-            # remove from self.feature_and_index_cols as well
-            self.feature_and_index_cols.remove(emb_present)
+            # remove embcol_s from self.feature_and_index_cols as well
             self.feature_and_index_cols = [x for x in self.feature_and_index_cols if embcol_ not in x]
 
         if emb_present in list(self.future_data.columns.values):
