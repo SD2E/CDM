@@ -140,6 +140,8 @@ class HostResponseModel(CombinatorialDesignModel):
                 fname = os.path.join(self.output_path, 'network_embedding.csv')
                 df_emb.to_csv(fname, index=False)
         else:
+            print("No df_network was given. Will try to find and read-in a "
+                  "previously written-out 'network_embedding.csv' (if it exists)...")
             try:
                 fname = os.path.join(self.output_path, 'network_embedding.csv')
                 df_emb = pd.read_csv(fname)
