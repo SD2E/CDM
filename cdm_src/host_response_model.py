@@ -46,10 +46,10 @@ class HostResponseModel(CombinatorialDesignModel):
         if isinstance(gene_col, str):
             col_names = col_names + [gene_col]
         if emb_present in col_names:
-            warnings.warn("One or more of the variables passed-in have {} as a column name or list entry.\n"
+            warnings.warn("One or more of the variables passed-in have '{}' as a column name or list entry.\n"
                           "We recommend that these are renamed otherwise they might be overwritten by HRM methods.".format(emb_present))
         if any(embcol_ in x for x in col_names):
-            warnings.warn("One or more of the variables passed-in have {} in a column name or list entry.\n"
+            warnings.warn("One or more of the variables passed-in have '{}' in a column name or list entry.\n"
                           "We recommend that these are renamed otherwise they might be overwritten by HRM methods.".format(embcol_))
 
         self.per_condition_index_col = gene_col
