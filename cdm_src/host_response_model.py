@@ -173,7 +173,7 @@ class HostResponseModel(CombinatorialDesignModel):
         operation_on_future_data = "added"
 
         if emb_present in list(self.existing_data.columns.values):
-            operation_on_existing_data = "replaced"
+            operation_on_existing_data = "REPLACED"
             self.existing_data.drop(columns=[emb_present] +
                                             [col for col in self.existing_data.columns.values if embcol_ in col],
                                     inplace=True)
@@ -181,7 +181,7 @@ class HostResponseModel(CombinatorialDesignModel):
             self.feature_and_index_cols = [x for x in self.feature_and_index_cols if embcol_ not in x]
 
         if emb_present in list(self.future_data.columns.values):
-            operation_on_future_data = "replaced"
+            operation_on_future_data = "REPLACED"
             self.future_data.drop(columns=[emb_present] +
                                           [col for col in self.future_data.columns.values if embcol_ in col],
                                   inplace=True)
