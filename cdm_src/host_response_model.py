@@ -3,7 +3,7 @@ import warnings
 import operator
 import numpy as np
 import pandas as pd
-from typing import Dict, Tuple, Callable
+from typing import Optional
 import matplotlib.pyplot as plt
 from sklearn.metrics import r2_score
 from harness.utils.parsing_results import *
@@ -13,11 +13,27 @@ from cdm_src.cdm_base_class import CombinatorialDesignModel
 
 class HostResponseModel(CombinatorialDesignModel):
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
-                 exp_condition_cols=None, target_col="logFC", gene_col="gene"):
+                 exp_condition_cols=None, target_col="logFC",
+                 custom_future_conditions: Optional[pd.DataFrame] = None,
+                 gene_col="gene"):
+        """
+
+        :param initial_data:
+        :param output_path:
+        :param leaderboard_query:
+        :param exp_condition_cols:
+        :param target_col:
+        :param custom_future_conditions: None, or a DataFrame with exp_condition_cols as its columns.
+                                         Each row should represent a condition. Rows do not have to be unique,
+                                         as the code will ignore duplicates. This variable is used by the user
+                                         to give a custom set of conditions to predict on when they don't want
+                                         the default of all possible conditions to be predicted.
+        :param gene_col:
+        """
         self.per_condition_index_col = gene_col
         self.gene_network_df = None
         super().__init__(initial_data, output_path, leaderboard_query,
-                         exp_condition_cols, target_col)
+                         exp_condition_cols, target_col, custom_future_conditions)
 
     def add_index_per_existing_condition(self, initial_data):
         """
@@ -84,7 +100,7 @@ class HostResponseModel(CombinatorialDesignModel):
         return r2_score(x, y)
 
     def embed_prior_network(self, df_network=None, src_node='Source', tgt_node='Target', attrs=['Weight'],
-                            emb_dim=32, workers=4, debug=False,write_out=False):
+                            emb_dim=32, workers=4, debug=False, write_out=False):
         '''
         Provide a dataframe in the form of an edge list and embed the network
         :param df_network: pd.Dataframe, dataframe of network. if nothing is passed in
@@ -121,8 +137,8 @@ class HostResponseModel(CombinatorialDesignModel):
             df_emb['emb_present'] = 1
 
             if write_out:
-                fname = os.path.join(self.output_path,'network_embedding.csv')
-                df_emb.to_csv(fname,index=False)
+                fname = os.path.join(self.output_path, 'network_embedding.csv')
+                df_emb.to_csv(fname, index=False)
         else:
             try:
                 fname = os.path.join(self.output_path, 'network_embedding.csv')
