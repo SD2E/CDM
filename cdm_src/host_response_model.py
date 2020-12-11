@@ -10,6 +10,9 @@ from harness.utils.parsing_results import *
 from cdm_src.utils.names import Names as N
 from cdm_src.cdm_base_class import CombinatorialDesignModel
 
+emb_present = "emb_present"
+embcol_ = "embcol_"
+
 
 class HostResponseModel(CombinatorialDesignModel):
     def __init__(self, initial_data=None, output_path=".", leaderboard_query=None,
@@ -30,6 +33,25 @@ class HostResponseModel(CombinatorialDesignModel):
                                          the default of all possible conditions to be predicted.
         :param gene_col:
         """
+        # checking to make sure that no column names equal "emb_present" or have "embcol_" in them
+        col_names = []
+        if isinstance(initial_data, pd.DataFrame):
+            col_names = col_names + list(initial_data.columns.values)
+        if isinstance(exp_condition_cols, list):
+            col_names = col_names + exp_condition_cols
+        if isinstance(target_col, str):
+            col_names = col_names + [target_col]
+        if isinstance(custom_future_conditions, pd.DataFrame):
+            col_names = col_names + list(custom_future_conditions.columns.values)
+        if isinstance(gene_col, str):
+            col_names = col_names + [gene_col]
+        if emb_present in col_names:
+            warnings.warn("One or more of the variables passed-in have '{}' as a column name or list entry.\n"
+                          "We recommend that these are renamed otherwise they might be overwritten by HRM methods.".format(emb_present))
+        if any(embcol_ in x for x in col_names):
+            warnings.warn("One or more of the variables passed-in have '{}' in a column name or list entry.\n"
+                          "We recommend that these are renamed otherwise they might be overwritten by HRM methods.".format(embcol_))
+
         self.per_condition_index_col = gene_col
         self.gene_network_df = None
         super().__init__(initial_data, output_path, leaderboard_query,
@@ -112,7 +134,6 @@ class HostResponseModel(CombinatorialDesignModel):
         :param debug: boolean, set to True if you want to run in Debug mode
         :return:
         '''
-
         if df_network is not None:
             from node2vec import Node2Vec
             import networkx as nx
@@ -131,27 +152,48 @@ class HostResponseModel(CombinatorialDesignModel):
                 print("Fitting model...")
                 model = node2vec.fit(window=2, min_count=1, batch_words=2)  # For debugging purposes
 
-            df_emb = pd.DataFrame(np.asarray(model.wv.vectors), columns=['embcol_' + str(i) for i in range(emb_dim)], index=G.nodes)
+            df_emb = pd.DataFrame(np.asarray(model.wv.vectors), columns=[embcol_ + str(i) for i in range(emb_dim)], index=G.nodes)
             df_emb.reset_index(inplace=True)
             df_emb.rename({df_emb.columns[0]: self.per_condition_index_col}, axis=1, inplace=True)
-            df_emb['emb_present'] = 1
+            df_emb[emb_present] = 1
 
             if write_out:
                 fname = os.path.join(self.output_path, 'network_embedding.csv')
                 df_emb.to_csv(fname, index=False)
         else:
+            print("No df_network was given. Will try to find and read-in a "
+                  "previously written-out 'network_embedding.csv' (if it exists)...")
             try:
                 fname = os.path.join(self.output_path, 'network_embedding.csv')
                 df_emb = pd.read_csv(fname)
             except:
                 raise ValueError('No previous network embedding found. You must provide a df_network.')
 
+        operation_on_existing_data = "added"
+        operation_on_future_data = "added"
+
+        if emb_present in list(self.existing_data.columns.values):
+            operation_on_existing_data = "REPLACED"
+            self.existing_data.drop(columns=[emb_present] +
+                                            [col for col in self.existing_data.columns.values if embcol_ in col],
+                                    inplace=True)
+            # remove embcol_s from self.feature_and_index_cols as well
+            self.feature_and_index_cols = [x for x in self.feature_and_index_cols if embcol_ not in x]
+
+        if emb_present in list(self.future_data.columns.values):
+            operation_on_future_data = "REPLACED"
+            self.future_data.drop(columns=[emb_present] +
+                                          [col for col in self.future_data.columns.values if embcol_ in col],
+                                  inplace=True)
+
         self.existing_data = pd.merge(self.existing_data, df_emb, how='left', on=self.per_condition_index_col)
-        self.existing_data['emb_present'].fillna(0, inplace=True)
+        self.existing_data[emb_present].fillna(0, inplace=True)
         self.future_data = pd.merge(self.future_data, df_emb, how='left', on=self.per_condition_index_col)
-        self.future_data['emb_present'].fillna(0, inplace=True)
-        self.feature_and_index_cols = self.feature_and_index_cols + ['embcol_' + str(i) for i in range(emb_dim)]
-        print('Embedding added to dataframe')
+        self.future_data[emb_present].fillna(0, inplace=True)
+        self.feature_and_index_cols = self.feature_and_index_cols + [embcol_ + str(i) for i in range(emb_dim)]
+
+        print("Embedding columns were {} in self.existing_data\n"
+              "Embedding columns were {} in self.future_data".format(operation_on_existing_data, operation_on_future_data))
         print()
 
     def generate_gene_network_df(self, network_df: pd.DataFrame, num_gene_2: int = 5,
