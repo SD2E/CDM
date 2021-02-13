@@ -122,6 +122,8 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
         generates and returns a dataframe of experimental conditions that lack data
         """
         if custom_future_conditions is not None:
+            # the next line is need to ensure consistent column order for downstream steps
+            custom_future_conditions = custom_future_conditions[self.exp_condition_cols]
             future_conditions = list(set(custom_future_conditions.itertuples(index=False, name=None)))
             print('{} conditions will be predicted (derived from the passed-in '
                   'custom_future_conditions DataFrame)\n'.format(len(future_conditions)))
