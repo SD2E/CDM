@@ -55,7 +55,7 @@ def plot_distributions(data: pd.DataFrame,
             axis = axs[ax_idx]
         else:
             axis = axs
-        axis.set_title("Condition = {}".format(cond_name), fontsize=14)
+        axis.set_title("Condition = {}".format(cond_name), fontsize=12)
         for col in columns_to_plot:
             if replicate_index_col is not None:
                 for r in list(cond_df[replicate_index_col].unique()):
