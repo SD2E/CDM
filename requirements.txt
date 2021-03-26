@@ -27,7 +27,7 @@ networkx == 2.4
 
 # cdm/cdm_src/host_response_model.py: 138
 # cdm/notebooks/Omics_tools_pipeline.ipynb: 147
-node2vec == 0.4.1
+node2vec == 0.3.2
 
 # cdm/cdm_src/cdm_base_class.py: 4
 # cdm/cdm_src/cdm_vis.py: 4
