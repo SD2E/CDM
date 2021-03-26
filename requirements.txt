@@ -4,6 +4,7 @@ git+https://gitlab.sd2e.org/sd2program/test-harness@bbf87626f530a095e0fa9c55fb64
 
 
 # The following are standard packages that need to be installed. The comments provide info on where they are used:
+gensim == 3.8.3
 
 # cdm/cdm_src/harness_models/CDM_classification.py: 3,4,5,6,7
 # cdm/cdm_src/harness_models/CDM_regression.py: 3,4,5,6,7
