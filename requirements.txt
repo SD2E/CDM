@@ -42,7 +42,7 @@ node2vec == 0.3.2
 # cdm/tests/test_evaluation_of_predictions/test_evaluation_of_predictions.py: 2
 # cdm/tests/test_overlap_inspection_methods/test_overlap_inspection_methods.py: 7
 # cdm/workflows/hrm_joint_class_reg_DEA_model/hrm_multioutput_DEA.py: 6
-numpy == 1.16.2
+numpy == 1.19.2
 
 # cdm/cdm_src/cdm_base_class.py: 5
 # cdm/cdm_src/cdm_vis.py: 5
