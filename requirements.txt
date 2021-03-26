@@ -1,5 +1,5 @@
 # The following are gitlab repos that were developed on SD2 and need to be installed:
-git+https://gitlab.sd2e.org/sd2program/omics_tools@c4988fac4530cdcdc54e9aa0303323dcdef55964#egg=omics_tools
+# git+https://gitlab.sd2e.org/sd2program/omics_tools@c4988fac4530cdcdc54e9aa0303323dcdef55964#egg=omics_tools
 git+https://gitlab.sd2e.org/sd2program/test-harness@bbf87626f530a095e0fa9c55fb64648461f0ca78#egg=test_harness
 
 
