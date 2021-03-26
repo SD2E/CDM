@@ -1,9 +1,10 @@
-README Last Updated by Hamed on 12/9/20
+README Last Updated by Hamed on 3/26/21
 
 # CDM
 
 ### Installation
 1. Clone this repository into the environment of your choice (directory, conda env, virtualenv, etc). Conda envs are recommended.
+*** Ignore steps 2 and 3 if you want more flexibility to install versions of your own choice
 2. Using command-line or terminal, Navigate inside the cdm directory. You should be at the same level of requirements.txt.
 3. Run `pip3 install -r requirements.txt` .
 4. Using command-line or terminal, navigate to the directory in which you cloned this repo (not inside the cdm directory itself). This
