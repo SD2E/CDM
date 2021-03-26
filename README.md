@@ -4,8 +4,11 @@ README Last Updated by Hamed on 12/9/20
 
 ### Installation
 1. Clone this repository into the environment of your choice (directory, conda env, virtualenv, etc). Conda envs are recommended.
-2. Using command-line, navigate to the directory in which you cloned this repo (not inside the repo itself).
-3. Run `pip3 install ./cdm` or `pip3 install -e cdm` .
+2. Using command-line or terminal, Navigate inside the cdm directory. You should be at the same level of requirements.txt.
+3. Run `pip3 install -r requirements.txt` .
+4. Using command-line or terminal, navigate to the directory in which you cloned this repo (not inside the cdm directory itself). This
+   should be 1 level higher than where you were in the previous step.
+5. Run `pip3 install ./cdm` or `pip3 install -e cdm` .
 This will install the `cdm` package and make it visible to all other repositories/projects
 you have in the current environment. The `-e` option stands for "editable". This will install the package
 in a way where any local changes to the package will automatically be reflected in your environment.
