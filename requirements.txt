@@ -78,7 +78,7 @@ pandas == 1.1.5
 # cdm/cdm_src/cdm_base_class.py: 12
 # cdm/cdm_src/circuit_fluorescence_model.py: 9
 # cdm/notebooks/parallel_EMD.py: 1
-scipy == 1.6.2
+scipy == 1.2.1
 
 # cdm/cdm_src/cdm_base_class.py: 6
 # cdm/cdm_src/cdm_vis.py: 6
