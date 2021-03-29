@@ -78,10 +78,10 @@ class CombinatorialDesignModel(metaclass=ABCMeta):
                                 "{}".format(query_leaderboard(query={}, th_output_location=self.output_path)))
             elif num_matches > 1:
                 warnings.warn("Your leaderboard query returned {} row matches. "
-                              "Only the first match will be used... Here are the matching rows:".format(num_matches))
+                              "Only the first match will be used... Here are the matching rows:\n\n{}".format(num_matches,
+                                                                                                              query_matches))
             else:
-                print("Your leaderboard query matched the following row:")
-            print(query_matches, "\n")
+                print("Your leaderboard query matched the following row:\n{}".format(query_matches))
             run_ids = query_matches[Names_TH.RUN_ID].values
             self.run_id = run_ids[0]
             print("The run_id for the Test Harness run being read-in is: {}".format(self.run_id))

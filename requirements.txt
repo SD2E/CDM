@@ -1,0 +1,94 @@
+# The following are gitlab repos that were developed on SD2 and need to be installed:
+# git+https://gitlab.sd2e.org/sd2program/omics_tools@c4988fac4530cdcdc54e9aa0303323dcdef55964#egg=omics_tools
+git+https://gitlab.sd2e.org/sd2program/test-harness@bbf87626f530a095e0fa9c55fb64648461f0ca78#egg=test_harness
+
+
+# The following are standard packages that need to be installed. The comments provide info on where they are used:
+gensim == 3.8.3
+
+# cdm/cdm_src/harness_models/CDM_classification.py: 3,4,5,6,7
+# cdm/cdm_src/harness_models/CDM_regression.py: 3,4,5,6,7
+# cdm/cdm_src/harness_models/HRM_multi_output_gene_network_model.py: 1,2,3,4,5,6,7,8,9
+# cdm/cdm_src/harness_models/HRM_multioutput_DEA.py: 1,2,3,4,5,6,7,8,9
+Keras == 2.4.3
+
+# cdm/cdm_src/cdm_base_class.py: 8
+# cdm/cdm_src/cdm_vis.py: 3,8
+# cdm/cdm_src/circuit_fluorescence_model.py: 8
+# cdm/cdm_src/host_response_model.py: 7
+# cdm/data/nand_2_point_0_data/cfm_data/.ipynb_checkpoints/nand_20_cfm_data_processing_and_sampling-checkpoint.ipynb: 7
+# cdm/data/nand_2_point_0_data/cfm_data/nand_20_cfm_data_processing_and_sampling.ipynb: 7
+# cdm/workflows/YS CRISPR Dose Response/ys_crispr_dose_response_functions.py: 5,10
+# cdm/workflows/nand_2_point_0_cfm/run_cfm_on_nand_2_point_0.py: 3
+matplotlib == 3.2.2
+
+# cdm/cdm_src/host_response_model.py: 139
+# cdm/notebooks/Omics_tools_pipeline.ipynb: 142
+networkx == 2.4
+
+# cdm/cdm_src/host_response_model.py: 138
+# cdm/notebooks/Omics_tools_pipeline.ipynb: 147
+node2vec == 0.3.2
+
+# cdm/cdm_src/cdm_base_class.py: 4
+# cdm/cdm_src/cdm_vis.py: 4
+# cdm/cdm_src/circuit_fluorescence_model.py: 4
+# cdm/cdm_src/host_response_model.py: 4
+# cdm/cdm_src/utils/load_demo_data.py: 10
+# cdm/cdm_src/utils/process_data_converge_files.py: 2
+# cdm/data/nand_2_point_0_data/cfm_data/.ipynb_checkpoints/nand_20_cfm_data_processing_and_sampling-checkpoint.ipynb: 4
+# cdm/data/nand_2_point_0_data/cfm_data/nand_20_cfm_data_processing_and_sampling.ipynb: 4
+# cdm/notebooks/Omics_tools_pipeline.ipynb: 153
+# cdm/tests/test_HRMs_set_impact_col/test_HRMs_set_impact_col.py: 2
+# cdm/tests/test_evaluation_of_predictions/test_evaluation_of_predictions.py: 2
+# cdm/tests/test_overlap_inspection_methods/test_overlap_inspection_methods.py: 7
+# cdm/workflows/hrm_joint_class_reg_DEA_model/hrm_multioutput_DEA.py: 6
+numpy == 1.19.2
+
+# cdm/cdm_src/cdm_base_class.py: 5
+# cdm/cdm_src/cdm_vis.py: 5
+# cdm/cdm_src/circuit_fluorescence_model.py: 5
+# cdm/cdm_src/harness_models/HRM_multi_output_gene_network_model.py: 10
+# cdm/cdm_src/harness_models/HRM_multioutput_DEA.py: 10
+# cdm/cdm_src/host_response_model.py: 5
+# cdm/cdm_src/utils/load_demo_data.py: 11
+# cdm/cdm_src/utils/process_data_converge_files.py: 1
+# cdm/data/nand_2_point_0_data/cfm_data/.ipynb_checkpoints/nand_20_cfm_data_processing_and_sampling-checkpoint.ipynb: 5
+# cdm/data/nand_2_point_0_data/cfm_data/nand_20_cfm_data_processing_and_sampling.ipynb: 5
+# cdm/data/nand_2_point_0_data/cfm_data/temporary.ipynb: 1
+# cdm/data/nand_2_point_0_data/hrm_data/step_1_add_parts_and_impact.py: 2
+# cdm/data/nand_2_point_0_data/hrm_data/step_2_create_train_test_dfs.py: 2
+# cdm/notebooks/Omics_tools_pipeline.ipynb: 1
+# cdm/notebooks/natural_circuit_host_genes_updated_Aug.ipynb: 1
+# cdm/tests/test_HRM_generate_dataframe_method/test_HRM_generate_dataframe_method.py: 2
+# cdm/tests/test_HRMs_set_impact_col/test_HRMs_set_impact_col.py: 3
+# cdm/tests/test_data_quality_assessments/test_data_quality_assessments.py: 1
+# cdm/tests/test_evaluation_of_predictions/test_evaluation_of_predictions.py: 3
+# cdm/tests/test_init_and_index_additions/test_hrm_embedding_model.py: 2
+# cdm/tests/test_init_and_index_additions/test_init_and_index_additions.py: 1
+# cdm/tests/test_model_runs/test_model_runs.py: 2
+# cdm/tests/test_overlap_inspection_methods/test_overlap_inspection_methods.py: 8
+# cdm/workflows/YS CRISPR Dose Response/ys_crispr_dose_response_functions.py: 6
+# cdm/workflows/hrm_joint_class_reg_DEA_model/hrm_multioutput_DEA.py: 1
+# cdm/workflows/hrm_multi-output-gene-network-model/hrm_multi-output-gene-network-model.py: 1
+# cdm/workflows/hrm_workflow.py: 2
+# cdm/workflows/nand_2_point_0_cfm/run_cfm_on_nand_2_point_0.py: 4
+pandas == 1.1.5
+
+# cdm/cdm_src/cdm_base_class.py: 12
+# cdm/cdm_src/circuit_fluorescence_model.py: 9
+# cdm/notebooks/parallel_EMD.py: 1
+scipy == 1.6.2
+
+# cdm/cdm_src/cdm_base_class.py: 6
+# cdm/cdm_src/cdm_vis.py: 6
+# cdm/cdm_src/circuit_fluorescence_model.py: 6
+# cdm/workflows/YS CRISPR Dose Response/ys_crispr_dose_response_functions.py: 7
+seaborn == 0.10.1
+
+# cdm/setup.py: 1
+setuptools == 54.2.0
+
+# cdm/cdm_src/cdm_base_class.py: 10,11
+# cdm/cdm_src/host_response_model.py: 8
+sklearn == 0.0

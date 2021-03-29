@@ -17,9 +17,14 @@ setup(
     include_package_data=True,
     install_requires=[
         "keras",
+        "matplotlib",
+        "networkx",
+        "node2vec",
+        "numpy",
         "pandas",
-        "sklearn",
+        "scipy",
         "seaborn",
-        "node2vec"
+        "setuptools",
+        "sklearn",
     ]
 )
