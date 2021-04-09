@@ -1,4 +1,4 @@
-README Last Updated by Hamed on 3/26/21
+README Last Updated by Mohammed on 4/9/21
 
 # CDM
 
@@ -24,3 +24,15 @@ Instead do `pip3 install ./cdm` so pip knows to look at for a directory.
 
 ### Running an Example Notebook
 Navigate to the "example" directory and run `example_notebook.ipynb`. Required data files are included in the same directory.
+
+### Data
+Datasets included are:
+* E. coli -- differential expression analysis for all conditions (`ecoli_additive_design_df.csv`) and a local version of the original EcoliNet (`CX.INT.EcoliNet.v1.4039gene.67494link.txt`) as well as a version where locus tags are translated to gene symbols (`CX.INT.EcoliNet.v1_translated.csv`). Use the translated version to join with the differential expression analysis data. For details on EcoliNet, visit: https://www.inetbio.org/ecolinet/
+
+* B. subtilis -- two files for differential expression analysis, training/validation data: (`additive_design_df_1.csv`) and test data collected from experiments after the model was trained (`additive_design_df_2.csv`). The network used for B. subtilis can be found here: (`bacillus_net.csv`) with details here: https://www.embopress.org/doi/full/10.15252/msb.20156236 
+
+
+
+### Authors
+* Mohammed Eslami, Netrias LLC
+* Hamed Eramian, Netrias LLC
