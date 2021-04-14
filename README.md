@@ -23,7 +23,7 @@ Instead do `pip3 install ./cdm` so pip knows to look at for a directory.
 **Note 2:** On TACC you might not be able to install this package unless you use `-e` **and/or** `--user`: e.g. `pip3 install -e cdm --user`.
 
 ### Running an Example Notebook
-Navigate to the "example" directory and run `example_notebook.ipynb`. Required data files are included in the same directory.
+There are two example notebooks in the example directory with associated data. Navigate to the "example" directory and run `example_notebook.ipynb` is for the B. subtilis examples and `ecoli_example_notebook.ipynb` is for the E. coli example. 
 
 ### Data
 Datasets included are:
